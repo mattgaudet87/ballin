@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <!-- No zooming, and let the game draw under the iPhone notch -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Ballin'</title>
+  <meta name="description" content="Flick basketball. Swipe up to shoot, 60 seconds on the clock." />
+  <meta name="theme-color" content="#070b18" />
+
+  <!-- Home-screen app settings (iPhone) -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Ballin'" />
+  <meta name="format-detection" content="telephone=no" />
+  <link rel="apple-touch-icon" href="icons/icon-180.png" />
+
+  <!-- Home-screen app settings (Android / Chrome) -->
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main id="game">
+    <!-- The whole game world is drawn on this canvas -->
+    <canvas id="canvas"></canvas>
+
+    <!-- In-game HUD -->
+    <div id="hud" class="hidden">
+      <div class="hud-score">
+        <span class="hud-label">SCORE</span>
+        <span id="score">0</span>
+        <span id="best-small">BEST 0</span>
+      </div>
+      <div class="hud-center">
+        <span id="timer">60</span>
+        <span id="streak" class="hidden"></span>
+      </div>
+    </div>
+
+    <button id="mute-btn" type="button" aria-label="Mute sound">
+      <!-- Speaker icon; the waves hide and the slash shows when muted -->
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+        <path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor" />
+        <path class="waves" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        <path class="slash" d="M16 9l6 6M22 9l-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+      </svg>
+    </button>
+
+    <div id="hint" class="hidden">
+      <span class="hint-arrow">↑</span>
+      Swipe up to shoot
+    </div>
+
+    <div id="countdown" class="hidden"></div>
+
+    <!-- Start screen -->
+    <section id="start-screen" class="overlay">
+      <div class="panel">
+        <h1 class="title">BALLIN'</h1>
+        <p class="tagline">Flick to shoot. 60 seconds on the clock.</p>
+        <div class="best-pill">BEST <strong id="start-best">0</strong></div>
+        <button id="play-btn" class="big-btn" type="button">PLAY</button>
+        <ul class="tips">
+          <li><b>Swipe up</b> on the ball — faster flick, longer shot</li>
+          <li><b>Swish</b> it for a bonus point</li>
+          <li><b>3 in a row</b> sets you on fire — double points</li>
+          <li>Hit <b>10 points</b> and the hoop starts moving</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- Game over screen -->
+    <section id="gameover-screen" class="overlay hidden">
+      <div class="panel">
+        <p class="eyebrow">TIME'S UP</p>
+        <div id="final-score" class="final-score">0</div>
+        <div id="new-best" class="new-best hidden">NEW BEST!</div>
+        <div class="best-pill">BEST <strong id="stat-best">0</strong></div>
+        <div class="stats">
+          <div><span id="stat-makes">0/0</span><small>Makes</small></div>
+          <div><span id="stat-accuracy">–</span><small>Accuracy</small></div>
+          <div><span id="stat-swishes">0</span><small>Swishes</small></div>
+          <div><span id="stat-streak">0</span><small>Best streak</small></div>
+        </div>
+        <button id="again-btn" class="big-btn" type="button">PLAY AGAIN</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- type="module" lets our JS files import each other -->
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
