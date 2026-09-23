@@ -1,0 +1,6 @@
+{
+  "name": "ballin",
+  "private": true,
+  "type": "module",
+  "description": "No dependencies. This file only tells Node (and Vercel's api/ functions) that our .js files are ES modules."
+}

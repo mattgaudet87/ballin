@@ -3,7 +3,8 @@
  * ---------------------------------------------------------------------------
  * Everything drawn with regular HTML instead of the canvas:
  *   - menu screens: home, Hot Hand hub (missions + locker), friends setup,
- *     pass-the-phone handoff, friends results, game over
+ *     pass-the-phone handoff, friends results, online (login, friends,
+ *     challenges), game over
  *   - the reward popup
  *   - the in-game HUD, "swipe up" hint and power-up trays
  *   - the mute button
@@ -23,6 +24,7 @@ const SCREENS = {
   home: 'home-screen',
   hothand: 'hothand-screen',
   friends: 'friends-screen',
+  online: 'online-screen',
   handoff: 'handoff-screen',
   results: 'results-screen',
   gameover: 'gameover-screen',
@@ -68,9 +70,20 @@ export class UI {
       ballTray: $('ball-tray'),
       drinkTray: $('drink-tray'),
       muteBtn: $('mute-btn'),
+      endBtn: $('end-btn'),
       tapStart: $('tap-start'),
       tapStartMode: $('tap-start-mode'),
       lockerTitle: $('locker-title'),
+      gameOverNote: $('gameover-note'),
+      againBtn: $('again-btn'),
+      onlineStatus: $('online-status'),
+      authForm: $('auth-form'),
+      authError: $('auth-error'),
+      accountBlock: $('account-block'),
+      accountName: $('account-name'),
+      challengeList: $('challenge-list'),
+      friendList: $('friend-list'),
+      onlineError: $('online-error'),
     };
     // Remember what's on screen so we only touch the page when something changes
     this.shown = {};
@@ -126,6 +139,46 @@ export class UI {
     }
   }
 
+  // --- Online screen buttons ---
+
+  /** callback('login' | 'signup', username, password) */
+  onAuth(callback) {
+    const send = (action) => callback(action, $('auth-username').value.trim(), $('auth-password').value);
+    // Pressing Enter in the form counts as LOG IN
+    this.el.authForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      send('login');
+    });
+    $('signup-btn').addEventListener('click', () => send('signup'));
+  }
+
+  onLogout(callback) {
+    $('logout-btn').addEventListener('click', callback);
+  }
+
+  /** callback(username) when the Add friend form is sent. */
+  onAddFriend(callback) {
+    $('add-friend-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const input = $('friend-username');
+      const name = input.value.trim();
+      if (name) callback(name, () => (input.value = ''));
+    });
+  }
+
+  /**
+   * Buttons inside the friend and challenge lists.
+   * handlers: { challenge(name), play(id), decline(id), unfriend(name) }
+   */
+  onOnlineList(handlers) {
+    for (const list of [this.el.friendList, this.el.challengeList]) {
+      list.addEventListener('click', (e) => {
+        const button = e.target.closest('button[data-action]');
+        if (button) handlers[button.dataset.action](button.dataset.value);
+      });
+    }
+  }
+
   /** The "Tap to start" screen was tapped. */
   onTapToStart(callback) {
     this.el.tapStart.addEventListener('click', callback);
@@ -133,6 +186,11 @@ export class UI {
 
   onMute(callback) {
     this.el.muteBtn.addEventListener('click', callback);
+  }
+
+  /** The END button (Free Throw, which has no clock and no way to lose). */
+  onEnd(callback) {
+    this.el.endBtn.addEventListener('click', callback);
   }
 
   /** callback(itemId) when a power-up in the in-game tray is tapped. */
@@ -181,11 +239,13 @@ export class UI {
   /**
    * Fill in best scores and lifetime basket counts wherever they appear.
    * @param bests     { blitz: 12, hothand: 30 } for the current difficulty
-   * @param lifetime  { blitz: 200, hothand: 90, friends: 40 }
+   * @param lifetime  { blitz: 200, hothand: 90, friends: 40 } for the current difficulty
+   * @param total     every basket ever made (all modes and difficulties)
    */
-  setRecords(bests, lifetime) {
+  setRecords(bests, lifetime, total) {
     $$('[data-best]').forEach((el) => (el.textContent = bests[el.dataset.best] ?? 0));
     $$('[data-lifetime]').forEach((el) => (el.textContent = lifetime[el.dataset.lifetime] ?? 0));
+    $('lifetime-total').textContent = total.toLocaleString();
   }
 
   /** Fill the Hot Hand hub's missions and locker. */
@@ -219,10 +279,14 @@ export class UI {
   /**
    * @param stats.title     headline, e.g. "TIME'S UP"
    * @param stats.missions  (Hot Hand only) mission views + results to animate
+   * @param stats.note      optional line under the score (online challenges)
+   * @param stats.againLabel text on the right-hand button (default "PLAY AGAIN")
    */
   showGameOver(stats) {
     const e = this.el;
     e.gameOverTitle.textContent = stats.title;
+    showMessage(e.gameOverNote, stats.note ?? null);
+    e.againBtn.textContent = stats.againLabel ?? 'PLAY AGAIN';
     e.finalScore.textContent = stats.score;
     e.statBest.textContent = stats.best;
     e.statLifetime.textContent = stats.lifetime;
@@ -278,6 +342,61 @@ export class UI {
     setTimeout(() => popup.addEventListener('click', close), 400);
   }
 
+  // --- Online ------------------------------------------------------------------------
+
+  /** The small chip on the home screen's Online card. */
+  setOnlineStatus(username, yourTurnCount = 0) {
+    const text = !username ? 'LOG IN' : yourTurnCount ? `${yourTurnCount} YOUR TURN` : username.toUpperCase();
+    this.el.onlineStatus.textContent = text;
+  }
+
+  /**
+   * Fill the Online screen.
+   * @param view.username    null when logged out (shows the login form)
+   * @param view.friends     from Online.friends(), or null while loading
+   * @param view.challenges  from Online.challenges(), or null while loading
+   * @param view.difficulty  current difficulty id (friends' bests are shown for it)
+   */
+  renderOnline({ username, friends, challenges, difficulty }) {
+    const e = this.el;
+    e.authForm.classList.toggle('hidden', !!username);
+    e.accountBlock.classList.toggle('hidden', !username);
+    if (!username) return;
+
+    e.accountName.textContent = username;
+    const loading = '<p class="list-empty">Loading…</p>';
+    e.challengeList.innerHTML = !challenges
+      ? loading
+      : challenges.length
+        ? challenges.map(challengeRow).join('')
+        : '<p class="list-empty">No challenges yet. Challenge a friend below!</p>';
+    e.friendList.innerHTML = !friends
+      ? loading
+      : friends.length
+        ? friends.map((f) => friendRow(f, difficulty)).join('')
+        : '<p class="list-empty">No friends yet. Add one by their username.</p>';
+  }
+
+  /** Show an error under the login form (or hide it with null). */
+  showAuthError(message) {
+    showMessage(this.el.authError, message);
+  }
+
+  /** Show an error on the logged-in part of the Online screen (or hide it with null). */
+  showOnlineError(message) {
+    showMessage(this.el.onlineError, message);
+  }
+
+  /** Update the line under the score on the game over screen (online results). */
+  setGameOverNote(text) {
+    showMessage(this.el.gameOverNote, text);
+  }
+
+  /** Change the right-hand game over button, e.g. to "RETRY". */
+  setAgainLabel(text) {
+    this.el.againBtn.textContent = text;
+  }
+
   // --- In game -------------------------------------------------------------------
 
   /** Hide menus and show the in-game HUD (and power-up trays if this mode has them). */
@@ -305,6 +424,7 @@ export class UI {
     hide(this.el.hint);
     hide(this.el.ballTray);
     hide(this.el.drinkTray);
+    hide(this.el.endBtn);
     this.shown = {};
   }
 
@@ -313,8 +433,9 @@ export class UI {
    * @param label   small text above the score ("SCORE" or a player's name)
    * @param sub     line under the score ("BEST 12" or "ROUND 1 OF 2")
    * @param center  what shows in the middle pill (seconds left, or the run count)
+   * @param endButton  show the END button (modes you can't lose)
    */
-  updateHUD({ label, score, sub, lifetime, center, lowTime, streak, onFire }) {
+  updateHUD({ label, score, sub, lifetime, center, lowTime, streak, onFire, endButton }) {
     this.setText('hudLabel', label);
     this.setText('score', score);
     this.setText('bestSmall', sub);
@@ -326,6 +447,11 @@ export class UI {
     this.setText('streak', streakText);
     this.el.streak.classList.toggle('hidden', !streakText);
     this.el.streak.classList.toggle('fire', onFire);
+
+    if (this.shown.endButton !== endButton) {
+      this.shown.endButton = endButton;
+      this.el.endBtn.classList.toggle('hidden', !endButton);
+    }
   }
 
   setHint(visible) {
@@ -415,6 +541,54 @@ function scoreboard(players, final) {
       return `<div class="score-row"><span class="who">${escapeHtml(p.name)}</span>${rounds}<b>${p.total}</b></div>`;
     })
     .join('');
+}
+
+/** Mode icons used for friends' best scores. */
+const LEADERBOARD = [
+  ['blitz', '⏱'],
+  ['hothand', '🔥'],
+  ['freethrow', '🎯'],
+];
+
+/** A friend: name, their bests on this difficulty, and a Challenge button. */
+function friendRow(friend, difficulty) {
+  const name = escapeHtml(friend.username);
+  const bests = LEADERBOARD.map(([mode, icon]) => `${icon} ${friend.bests[mode]?.[difficulty] ?? 0}`).join(' · ');
+  return `<div class="online-row">
+    <div class="online-who"><b>${name}</b><small>${bests}</small></div>
+    <button type="button" class="row-btn" data-action="challenge" data-value="${name}">CHALLENGE</button>
+    <button type="button" class="row-x" data-action="unfriend" data-value="${name}" aria-label="Remove ${name}">×</button>
+  </div>`;
+}
+
+/** A challenge, described from your side. */
+function challengeRow(c) {
+  const name = escapeHtml(c.opponent);
+  const diff = c.difficulty[0].toUpperCase() + c.difficulty.slice(1);
+  const score = `${c.myScore}–${c.theirScore}`;
+  const rows = {
+    yourTurn: [`${name} challenged you`, `Your turn · ${diff}`,
+      `<button type="button" class="row-btn go" data-action="play" data-value="${c.id}">PLAY</button>
+       <button type="button" class="row-x" data-action="decline" data-value="${c.id}" aria-label="Decline">×</button>`],
+    waiting: [`vs ${name}`, `You scored ${c.myScore} · waiting for them · ${diff}`, ''],
+    won: [`You beat ${name}`, `${score} · ${diff}`, rematch(name)],
+    lost: [`${name} beat you`, `${score} · ${diff}`, rematch(name)],
+    tie: [`Tie with ${name}`, `${score} · ${diff}`, rematch(name)],
+    declined: [`vs ${name}`, `They passed · ${diff}`, rematch(name)],
+  };
+  const [title, detail, buttons] = rows[c.status];
+  return `<div class="online-row ${c.status}">
+    <div class="online-who"><b>${title}</b><small>${detail}</small></div>${buttons}
+  </div>`;
+}
+
+function rematch(name) {
+  return `<button type="button" class="row-btn" data-action="challenge" data-value="${name}">REMATCH</button>`;
+}
+
+function showMessage(el, text) {
+  el.textContent = text ?? '';
+  el.classList.toggle('hidden', !text);
 }
 
 /** Player names are typed by users, so make sure they can't inject HTML. */

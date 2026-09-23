@@ -3,9 +3,9 @@
   "configurations": [
     {
       "name": "ballin",
-      "runtimeExecutable": "python3",
+      "runtimeExecutable": "node",
       "runtimeArgs": [
-        "tools/serve.py",
+        "tools/dev.mjs",
         "8000"
       ],
       "port": 8000

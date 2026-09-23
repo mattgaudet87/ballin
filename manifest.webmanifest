@@ -1,7 +1,7 @@
 {
   "name": "Ballin' — Flick Basketball",
   "short_name": "Ballin'",
-  "description": "Flick basketball. Swipe up to shoot, 60 seconds on the clock.",
+  "description": "Flick basketball. Swipe up to shoot, and challenge your friends online.",
   "start_url": "./",
   "scope": "./",
   "display": "fullscreen",

@@ -1,7 +1,7 @@
 /**
  * modes.js
  * ---------------------------------------------------------------------------
- * Game modes, difficulty levels, and Hot Hand's basket multipliers.
+ * Game modes (Blitz, Hot Hand, Blitz with Friends, Free Throw, Online Challenge), difficulty levels, and Hot Hand's basket multipliers.
  * main.js reads the current mode/difficulty to decide things like
  * "is there a clock?", "does one miss end the game?" and "how far is the hoop?".
  *
@@ -19,9 +19,11 @@ export const MODES = {
     basketMultipliers: false,
     powerUps: false, // specialty balls + energy drinks
     missions: false,
+    fire: true, // 3 in a row = on fire (double points)
     // The hoop starts sliding once `stat` reaches `startAt`, then speeds up
-    // by `speedPer` for every extra point of that stat.
-    movingHoop: { stat: 'score', startAt: 10, speedStart: 0.7, speedPer: 0.05 },
+    // by `speedPer` for every extra point of that stat. `difficulties` (if
+    // given) limits it: in the Blitz modes the hoop only moves on Hard.
+    movingHoop: { stat: 'score', startAt: 10, speedStart: 0.7, speedPer: 0.05, difficulties: ['hard'] },
   },
 
   hothand: {
@@ -33,6 +35,7 @@ export const MODES = {
     basketMultipliers: true,
     powerUps: true,
     missions: true,
+    fire: true,
     // Multipliers make scores jump around, so difficulty follows makes instead.
     movingHoop: { stat: 'makes', startAt: 5, speedStart: 0.7, speedPer: 0.08 },
   },
@@ -46,11 +49,46 @@ export const MODES = {
     basketMultipliers: false,
     powerUps: false,
     missions: false,
+    fire: true,
     // Pass and play: turns go A, B, A, B.
     passAndPlay: { players: 2, roundsEach: 2 },
     // `score` here is the player's running total, so the hoop gets tougher
-    // in round 2 for BOTH players equally.
-    movingHoop: { stat: 'score', startAt: 10, speedStart: 0.7, speedPer: 0.05 },
+    // in round 2 for BOTH players equally (on Hard; it stays still otherwise).
+    movingHoop: { stat: 'score', startAt: 10, speedStart: 0.7, speedPer: 0.05, difficulties: ['hard'] },
+  },
+
+  freethrow: {
+    id: 'freethrow',
+    name: 'Free Throw',
+    timed: false,
+    duration: 0,
+    endsOnMiss: false, // missing just resets your streak
+    basketMultipliers: false,
+    powerUps: false,
+    missions: false,
+    fire: false, // no multipliers of any kind
+    // The score is your current streak (makes in a row), and your best score
+    // (the record) is your longest streak ever.
+    streakScoring: true,
+    fixedSpot: true, // the ball always sits in the middle, like a real free throw line
+    endless: true, // no way to lose, so an END button finishes the session
+    movingHoop: null, // the hoop never moves
+  },
+
+  // An online challenge against a friend (see online.js and the api/ folder).
+  // Each player plays one Blitz game on their own time; the higher score wins.
+  online: {
+    id: 'online',
+    name: 'Online Challenge',
+    timed: true,
+    duration: 60,
+    endsOnMiss: false,
+    basketMultipliers: false,
+    powerUps: false,
+    missions: false,
+    fire: true,
+    online: true,
+    movingHoop: { stat: 'score', startAt: 10, speedStart: 0.7, speedPer: 0.05, difficulties: ['hard'] },
   },
 };
 
@@ -60,7 +98,8 @@ export const MODES = {
  *   powerMatters false = every shot flies exactly the right distance, so only
  *                aim matters (no short shots, no back-rim clangs)
  *   aimAssist    0 = none, 1 = always straight at the hoop
- *   startXRange  how far left/right the ball can start (meters)
+ *   startXRange  how far left/right the ball can start (meters). The ball is
+ *                close to the camera, so small numbers are big on screen.
  *   hoopRange    how far the moving hoop slides (meters)
  *   apexY        how high shots peak (meters)
  */
@@ -71,7 +110,7 @@ export const DIFFICULTIES = {
     hoopZ: 1.3,
     powerMatters: false,
     aimAssist: 0.6,
-    startXRange: 0.22,
+    startXRange: 0.34,
     hoopRange: 0.25,
     apexY: 3.7,
   },
@@ -91,7 +130,7 @@ export const DIFFICULTIES = {
     hoopZ: 3.6,
     powerMatters: true,
     aimAssist: 0.35,
-    startXRange: 0.35,
+    startXRange: 0.28,
     hoopRange: 0.62,
     apexY: 4.0,
   },

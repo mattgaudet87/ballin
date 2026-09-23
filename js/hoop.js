@@ -18,10 +18,13 @@ const RIM_SEGMENTS = 40;
 const COLORS = {
   rim: '#ff5a1f',
   rimDark: '#9e2c08',
-  net: 'rgba(255, 255, 255, 0.85)',
-  board: 'rgba(255, 255, 255, 0.12)',
-  boardEdge: '#ffffff',
-  pole: '#1d2540',
+  net: 'rgba(255, 255, 255, 0.9)',
+  board: '#f7f7f5', // solid white backboard
+  boardShade: '#d9dbe0', // bottom of the board, a little darker
+  boardTrim: '#c8261e', // red border and shooter's square
+  boardEdge: '#9aa0ab',
+  poleLight: '#f2f4f8',
+  poleDark: '#9da4b2',
 };
 
 export class Hoop {
@@ -163,21 +166,27 @@ export class Hoop {
     this.drawRim(ctx, 'front');
   }
 
+  /** A silver pole from the floor up behind the backboard, with a shadow at its base. */
   drawPole(ctx) {
     const poleZ = this.boardZ + 0.35;
     const bottom = project(this.x, 0, poleZ);
     const top = project(this.x, this.boardBottom + 0.25, poleZ);
-    const boardBack = project(this.x, this.boardBottom + 0.25, this.boardZ);
-    if (!bottom || !top || !boardBack) return;
+    if (!bottom || !top) return;
+    const w = 0.1 * bottom.scale;
 
-    ctx.strokeStyle = COLORS.pole;
-    ctx.lineCap = 'round';
-    ctx.lineWidth = 0.09 * top.scale;
+    // Shadow on the floor
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
     ctx.beginPath();
-    ctx.moveTo(bottom.x, bottom.y);
-    ctx.lineTo(top.x, top.y);
-    ctx.lineTo(boardBack.x, boardBack.y);
-    ctx.stroke();
+    ctx.ellipse(bottom.x, bottom.y, w * 2.2, w * 0.5, 0, 0, TAU);
+    ctx.fill();
+
+    // Round-looking pole: light in the middle, darker at the edges
+    const shine = ctx.createLinearGradient(bottom.x - w / 2, 0, bottom.x + w / 2, 0);
+    shine.addColorStop(0, COLORS.poleDark);
+    shine.addColorStop(0.4, COLORS.poleLight);
+    shine.addColorStop(1, COLORS.poleDark);
+    ctx.fillStyle = shine;
+    ctx.fillRect(bottom.x - w / 2, top.y, w, bottom.y - top.y);
   }
 
   drawBoard(ctx) {
@@ -188,20 +197,35 @@ export class Hoop {
     const s = tl.scale;
     const w = br.x - tl.x;
     const h = br.y - tl.y;
-    const corner = 0.04 * s;
+    const corner = 0.05 * s;
 
-    // Glass
-    ctx.fillStyle = COLORS.board;
-    ctx.strokeStyle = COLORS.boardEdge;
-    ctx.lineWidth = Math.max(2, 0.035 * s);
+    // Soft shadow behind the board, then the white board itself
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
+    ctx.shadowBlur = 0.12 * s;
+    ctx.shadowOffsetY = 0.03 * s;
+    const face = ctx.createLinearGradient(0, tl.y, 0, br.y);
+    face.addColorStop(0, COLORS.board);
+    face.addColorStop(1, COLORS.boardShade);
+    ctx.fillStyle = face;
     roundRect(ctx, tl.x, tl.y, w, h, corner);
     ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle = COLORS.boardEdge;
+    ctx.lineWidth = Math.max(1.5, 0.015 * s);
+    ctx.stroke();
+
+    // Red border just inside the edge
+    const inset = 0.05 * s;
+    ctx.strokeStyle = COLORS.boardTrim;
+    ctx.lineWidth = Math.max(2, 0.03 * s);
+    roundRect(ctx, tl.x + inset, tl.y + inset, w - inset * 2, h - inset * 2, corner * 0.6);
     ctx.stroke();
 
     // Shooter's square above the rim
     const sq = project(this.x - 0.3, this.rimY + 0.45, this.boardZ);
     const sqEnd = project(this.x + 0.3, this.rimY + 0.02, this.boardZ);
-    ctx.lineWidth = Math.max(1.5, 0.028 * s);
+    ctx.lineWidth = Math.max(2, 0.035 * s);
     ctx.strokeRect(sq.x, sq.y, sqEnd.x - sq.x, sqEnd.y - sq.y);
   }
 

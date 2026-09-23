@@ -7,9 +7,11 @@
  *   3. runs the main loop ~60 times a second: update() then render()
  *   4. applies the game RULES: scoring, streaks, on fire, the clock, power-ups,
  *      basket multipliers and missions
+ *   5. runs the online screens (login, friends, challenges) using online.js
  *
  * The other modules each do one job and main.js wires them together.
- * Mode rules live in modes.js, power-ups in items.js, missions in missions.js.
+ * Mode rules live in modes.js, power-ups in items.js, missions in missions.js,
+ * and talking to the server in online.js.
  */
 import { CONFIG } from './config.js';
 import { fitCamera, project } from './camera.js';
@@ -25,6 +27,7 @@ import { loadNumber, saveNumber, loadJSON, saveJSON } from './storage.js';
 import { MODES, DIFFICULTIES, rollBasketMultiplier } from './modes.js';
 import { Inventory, ITEMS, DRINK_EFFECTS } from './items.js';
 import { Missions } from './missions.js';
+import { Online } from './online.js';
 
 const G = CONFIG.game;
 const KEYS = CONFIG.storageKeys;
@@ -53,6 +56,9 @@ const ui = new UI();
 // (the locker is picked once the difficulty is known, in applyDifficulty)
 const inventory = new Inventory();
 const missions = new Missions();
+const online = new Online();
+// What the Online screen last downloaded (null = not loaded yet)
+const onlineView = { friends: null, challenges: null };
 
 /** Everything about the current game session. */
 const game = {
@@ -60,8 +66,12 @@ const game = {
   mode: MODES.blitz,
   difficulty: DIFFICULTIES[loadJSON(KEYS.difficulty, 'normal')] ?? DIFFICULTIES.normal,
   best: loadBests(), // best[modeId][difficultyId]
-  lifetime: loadLifetime(), // lifetime baskets per mode
+  lifetime: loadLifetime(), // lifetime[modeId][difficultyId] = baskets made ever
   match: null, // Blitz with Friends: { players: [{ name, rounds, total }], turn }
+  // Online challenge being played: { id, opponent, score }.
+  // id is null for a NEW challenge; score is set once the game ends and
+  // stays until the server has it (so a failed send can be retried).
+  challenge: null,
 
   // Per-game stats (reset in startGame)
   score: 0,
@@ -74,12 +84,14 @@ const game = {
   bankShots: 0,
   bigMultiplierMakes: 0,
   itemsUsed: 0,
+  startBest: 0, // the record when this game started (to spot a new best)
 
   timeLeft: 0,
   shotOutcome: null, // null while the ball is still "live", then 'make' | 'miss'
   resetTimer: 0,
   basketMultiplier: null, // Hot Hand bonus on the current basket, e.g. { value: 3, color }
   shot: null, // power-ups used by the ball in the air (from inventory.startShot())
+  spot: -1, // which of the ball's starting spots was used last (so it never repeats)
 };
 
 const physicsEvents = [];
@@ -99,8 +111,40 @@ function loadBests() {
 
 function loadLifetime() {
   const lifetime = {};
-  for (const mode of Object.keys(MODES)) lifetime[mode] = loadNumber(KEYS.baskets + mode, 0);
+  for (const mode of Object.keys(MODES)) {
+    lifetime[mode] = {};
+    for (const diff of Object.keys(DIFFICULTIES)) lifetime[mode][diff] = loadNumber(`${KEYS.baskets}${mode}.${diff}`, 0);
+
+    // Older versions counted baskets per mode only. Move that count to the
+    // difficulty the player last used (once), then clear the old key.
+    const old = loadNumber(KEYS.baskets + mode, 0);
+    if (old > 0) {
+      const diff = DIFFICULTIES[loadJSON(KEYS.difficulty, 'normal')] ? loadJSON(KEYS.difficulty, 'normal') : 'normal';
+      lifetime[mode][diff] += old;
+      saveNumber(`${KEYS.baskets}${mode}.${diff}`, lifetime[mode][diff]);
+      saveNumber(KEYS.baskets + mode, 0);
+    }
+  }
   return lifetime;
+}
+
+/** Lifetime baskets for the current difficulty, e.g. { blitz: 200, hothand: 90 }. */
+function currentLifetime() {
+  const counts = {};
+  for (const mode of Object.keys(MODES)) counts[mode] = game.lifetime[mode][game.difficulty.id];
+  return counts;
+}
+
+/** Every basket ever made, all modes and difficulties added up. */
+function totalBaskets() {
+  let total = 0;
+  for (const byDiff of Object.values(game.lifetime)) for (const n of Object.values(byDiff)) total += n;
+  return total;
+}
+
+/** Refresh best scores and basket counts on the menus. */
+function showRecords() {
+  ui.setRecords(currentBests(), currentLifetime(), totalBaskets());
 }
 
 /** Best scores for the current difficulty, e.g. { blitz: 12, hothand: 40 }. */
@@ -130,9 +174,9 @@ function resize() {
   }
   fitCamera(view.width, view.height, hoop.baseZ);
 
-  // Redraw the cached background at the new size
+  // Redraw the cached background at the new size (each difficulty has its own court)
   courtCtx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
-  drawCourt(courtCtx, view.width, view.height, hoop);
+  drawCourt(courtCtx, view.width, view.height, hoop, game.difficulty.id);
 }
 
 /** Switch difficulty: moves the hoop, refits the camera and redraws the court. */
@@ -143,9 +187,10 @@ function applyDifficulty(id) {
   hoop.setDistance(game.difficulty.hoopZ, game.difficulty.hoopRange);
   resize();
   ui.setDifficulty(id);
-  ui.setRecords(currentBests(), game.lifetime);
+  showRecords();
   ui.setLockerTitle(game.difficulty.name);
   if (ui.isShowing('hothand')) ui.renderHotHandHub(missionViews(), inventory);
+  if (ui.isShowing('online')) renderOnline(); // friends' bests are per difficulty
 }
 
 window.addEventListener('resize', resize);
@@ -185,6 +230,7 @@ new SwipeInput(canvas, {
 ui.onModeSelect((modeId) => {
   if (modeId === 'hothand') showHotHandHub();
   else if (modeId === 'friends') showFriendsSetup();
+  else if (modeId === 'online') showOnlineHub();
   else startGame(modeId);
 });
 ui.onDifficulty(applyDifficulty);
@@ -195,10 +241,22 @@ ui.onFriendsStart(startMatch);
 ui.onHandoffReady(() => startGame('friends', { tapToStart: false }));
 ui.onTapToStart(beginPlay);
 ui.onRematch(() => startMatch(game.match.players.map((p) => p.name)));
-ui.onPlayAgain(() => startGame(game.mode.id));
+ui.onPlayAgain(() => {
+  if (!game.mode.online) startGame(game.mode.id);
+  else if (game.challenge?.score != null) sendChallengeResult(); // the send failed: RETRY
+  else showOnlineHub();
+});
+ui.onAuth(logIn);
+ui.onLogout(logOut);
+ui.onAddFriend(addFriend);
+ui.onOnlineList({ challenge: challengeFriend, play: playChallenge, decline: declineChallenge, unfriend: removeFriend });
 ui.onCollect(collectReward);
 ui.onItem(useItem);
 ui.onMute(() => ui.setMuted(audio.toggleMute()));
+// Free Throw has no clock and no way to lose, so END finishes the session
+ui.onEnd(() => {
+  if (inGame() && game.mode.endless && ball.state === 'ready') endGame();
+});
 ui.setMuted(audio.muted);
 
 /** Launch the ball based on the player's swipe. */
@@ -244,14 +302,14 @@ function useItem(id) {
 function showHome() {
   game.state = 'menu';
   newBall();
-  ui.setRecords(currentBests(), game.lifetime);
+  showRecords();
   ui.showScreen('home');
 }
 
 function showHotHandHub() {
   game.state = 'menu';
   newBall();
-  ui.setRecords(currentBests(), game.lifetime);
+  showRecords();
   ui.renderHotHandHub(missionViews(), inventory);
   ui.showScreen('hothand');
 }
@@ -320,6 +378,167 @@ function endRound() {
   }
 }
 
+// --- Online ----------------------------------------------------------------------
+
+function showOnlineHub() {
+  game.state = 'menu';
+  game.challenge = null;
+  newBall();
+  ui.showOnlineError(null);
+  ui.showScreen('online');
+  renderOnline();
+  refreshOnline();
+}
+
+function renderOnline() {
+  ui.renderOnline({ username: online.username, ...onlineView, difficulty: game.difficulty.id });
+  const yourTurn = onlineView.challenges?.filter((c) => c.status === 'yourTurn').length ?? 0;
+  ui.setOnlineStatus(online.username, yourTurn);
+}
+
+/** Download the latest friends list and challenges, then redraw. */
+async function refreshOnline() {
+  if (!online.username) return renderOnline();
+  try {
+    const [friends, challenges] = await Promise.all([online.friends(), online.challenges()]);
+    Object.assign(onlineView, { friends, challenges });
+  } catch (err) {
+    ui.showOnlineError(err.message);
+  }
+  renderOnline();
+}
+
+/** The login form was sent. action is 'login' or 'signup'. */
+async function logIn(action, username, password) {
+  ui.showAuthError(null);
+  try {
+    if (action === 'signup') await online.signUp(username, password);
+    else await online.logIn(username, password);
+  } catch (err) {
+    return ui.showAuthError(err.message);
+  }
+  Object.assign(onlineView, { friends: null, challenges: null });
+  syncScores();
+  showOnlineHub();
+}
+
+async function logOut() {
+  await online.logOut();
+  Object.assign(onlineView, { friends: null, challenges: null });
+  renderOnline();
+}
+
+/**
+ * Save this device's records to the account, and bring back any higher ones
+ * saved there (e.g. from another phone). Quietly does nothing when offline.
+ *
+ * The device remembers whose records it holds. If a DIFFERENT account logs
+ * in (a shared iPad), we don't upload the old player's records to it; the
+ * device switches to the new account's saved records instead.
+ */
+async function syncScores() {
+  const username = online.username;
+  if (!username) return;
+  const owner = loadJSON(KEYS.recordsOwner, null);
+  const switching = owner !== null && owner.toLowerCase() !== username.toLowerCase();
+
+  let saved;
+  try {
+    saved = switching ? await online.syncScores({}, {}) : await online.syncScores(game.best, game.lifetime);
+  } catch {
+    return; // no internet right now; it tries again after the next game
+  }
+  for (const mode of Object.keys(MODES)) {
+    for (const diff of Object.keys(DIFFICULTIES)) {
+      const best = saved.bests[mode]?.[diff] ?? 0;
+      if (switching || best > game.best[mode][diff]) {
+        game.best[mode][diff] = best;
+        saveNumber(`${KEYS.best}${mode}.${diff}`, best);
+      }
+      const baskets = saved.baskets[mode]?.[diff] ?? 0;
+      if (switching || baskets > game.lifetime[mode][diff]) {
+        game.lifetime[mode][diff] = baskets;
+        saveNumber(`${KEYS.baskets}${mode}.${diff}`, baskets);
+      }
+    }
+  }
+  saveJSON(KEYS.recordsOwner, username);
+  if (!inGame()) showRecords();
+}
+
+async function addFriend(username, clearInput) {
+  ui.showOnlineError(null);
+  try {
+    await online.addFriend(username);
+    clearInput();
+  } catch (err) {
+    return ui.showOnlineError(err.message);
+  }
+  refreshOnline();
+}
+
+async function removeFriend(username) {
+  if (!confirm(`Remove ${username} from your friends?`)) return;
+  try {
+    await online.removeFriend(username);
+  } catch (err) {
+    return ui.showOnlineError(err.message);
+  }
+  refreshOnline();
+}
+
+/** Start a NEW challenge: you play first, it's sent when your game ends. */
+function challengeFriend(username) {
+  game.challenge = { id: null, opponent: username, score: null };
+  startGame('online');
+}
+
+/** Answer a challenge a friend sent you, on the difficulty they picked. */
+function playChallenge(id) {
+  const challenge = onlineView.challenges?.find((c) => c.id === Number(id));
+  if (!challenge) return;
+  applyDifficulty(challenge.difficulty);
+  game.challenge = { id: challenge.id, opponent: challenge.opponent, score: null };
+  startGame('online');
+}
+
+async function declineChallenge(id) {
+  try {
+    await online.declineChallenge(Number(id));
+  } catch (err) {
+    return ui.showOnlineError(err.message);
+  }
+  refreshOnline();
+}
+
+/** Online game over: send the score (a new challenge, or the answer to one). */
+async function sendChallengeResult() {
+  const challenge = game.challenge;
+  if (challenge.sending) return; // already on its way (double tap on RETRY)
+  challenge.sending = true;
+  ui.setGameOverNote('Sending your score…');
+  ui.setAgainLabel('CHALLENGES');
+  try {
+    const result = challenge.id
+      ? await online.finishChallenge(challenge.id, challenge.score)
+      : await online.sendChallenge(challenge.opponent, game.difficulty.id, challenge.score);
+    game.challenge = null; // delivered
+    ui.setGameOverNote(challengeNote(result));
+    if (result.status === 'won') setTimeout(() => audio.newBest(), 300);
+  } catch (err) {
+    ui.setGameOverNote(`${err.message} Your score wasn’t sent yet.`);
+    ui.setAgainLabel('RETRY');
+    challenge.sending = false;
+  }
+}
+
+function challengeNote({ status, opponent, myScore, theirScore }) {
+  if (status === 'won') return `🏆 You beat ${opponent}, ${myScore}–${theirScore}!`;
+  if (status === 'lost') return `${opponent} wins this one, ${theirScore}–${myScore}.`;
+  if (status === 'tie') return `Tie with ${opponent}, ${myScore}–${theirScore}!`;
+  return `Sent to ${opponent}! You’ll see who won once they play.`;
+}
+
 // --- Playing -------------------------------------------------------------------
 
 /**
@@ -343,6 +562,7 @@ function startGame(modeId, { tapToStart = true } = {}) {
     bankShots: 0,
     bigMultiplierMakes: 0,
     itemsUsed: 0,
+    startBest: game.best[modeId][game.difficulty.id],
     timeLeft: mode.duration,
     shotOutcome: null,
   });
@@ -350,7 +570,8 @@ function startGame(modeId, { tapToStart = true } = {}) {
   effects.reset();
   newBall();
   ui.showGame({ powerUps: mode.powerUps });
-  if (tapToStart) ui.showTapToStart(`${mode.name} · ${game.difficulty.name}`);
+  const title = mode.online ? `vs ${game.challenge.opponent}` : mode.name;
+  if (tapToStart) ui.showTapToStart(`${title} · ${game.difficulty.name}`);
   else beginPlay();
 }
 
@@ -371,18 +592,19 @@ function inGame() {
 function endGame() {
   const mode = game.mode;
   inventory.selectedBall = null; // unused balls go back in the locker
-  saveNumber(KEYS.baskets + mode.id, game.lifetime[mode.id]);
+  const diff = game.difficulty.id;
+  saveNumber(`${KEYS.baskets}${mode.id}.${diff}`, game.lifetime[mode.id][diff]);
 
-  if (mode.passAndPlay) return endRound();
+  if (mode.passAndPlay) {
+    syncScores(); // lifetime baskets
+    return endRound();
+  }
   game.state = 'gameover';
 
-  const diff = game.difficulty.id;
-  const isNewBest = game.score > game.best[mode.id][diff];
-  if (isNewBest) {
-    game.best[mode.id][diff] = game.score;
-    saveNumber(`${KEYS.best}${mode.id}.${diff}`, game.score);
-    setTimeout(() => audio.newBest(), 500);
-  }
+  const result = gameResult();
+  const isNewBest = result > game.startBest;
+  saveBest(result);
+  if (isNewBest) setTimeout(() => audio.newBest(), 500);
 
   // Hot Hand missions: record progress. Rewards wait for "Collect reward".
   let missionInfo = null;
@@ -394,13 +616,38 @@ function endGame() {
 
   ui.showGameOver({
     ...game,
-    title: `${mode.timed ? 'TIME’S UP' : 'MISSED'} · ${game.difficulty.name.toUpperCase()}`,
+    score: result,
+    title: `${gameOverTitle()} · ${game.difficulty.name.toUpperCase()}`,
     best: game.best[mode.id][diff],
-    lifetime: game.lifetime[mode.id],
+    lifetime: game.lifetime[mode.id][diff],
     isNewBest,
     missions: missionInfo,
   });
   newBall();
+
+  if (mode.online) {
+    game.challenge.score = game.score;
+    sendChallengeResult();
+  }
+  syncScores(); // save records to the account (if logged in)
+}
+
+/** The number that counts as this game's score (Free Throw: the longest streak). */
+function gameResult() {
+  return game.mode.streakScoring ? game.bestStreak : game.score;
+}
+
+function gameOverTitle() {
+  if (game.mode.streakScoring) return 'BEST STREAK';
+  return game.mode.timed ? 'TIME’S UP' : 'MISSED';
+}
+
+/** Save a new record for the current mode + difficulty (if it is one). */
+function saveBest(value) {
+  const { mode, difficulty } = game;
+  if (value <= game.best[mode.id][difficulty.id]) return;
+  game.best[mode.id][difficulty.id] = value;
+  saveNumber(`${KEYS.best}${mode.id}.${difficulty.id}`, value);
 }
 
 /** The numbers missions care about, for the game that just ended. */
@@ -419,7 +666,7 @@ function gameStats() {
 }
 
 function isOnFire() {
-  return game.state === 'playing' && game.streak >= G.fireStreak;
+  return game.state === 'playing' && game.mode.fire && game.streak >= G.fireStreak;
 }
 
 function timeIsUp() {
@@ -428,14 +675,32 @@ function timeIsUp() {
 
 /** Bring out a fresh ball (random spot in a game, centered in menus). */
 function newBall() {
-  const range = game.difficulty.startXRange;
-  ball.reset(inGame() ? (Math.random() * 2 - 1) * range : CONFIG.ball.startX);
+  const randomSpot = inGame() && !game.mode.fixedSpot;
+  ball.reset(randomSpot ? randomStartX() : CONFIG.ball.startX);
   ball.skin = inGame() && game.mode.powerUps ? inventory.selectedBall : null;
   game.shot = null;
 
   // Hot Hand: maybe put a multiplier on the next basket
   game.basketMultiplier = inGame() && game.mode.basketMultipliers ? rollBasketMultiplier() : null;
   if (game.basketMultiplier?.value >= 5) audio.rareMultiplier();
+}
+
+/**
+ * Pick one of the evenly spaced starting spots across the difficulty's range,
+ * e.g. 8 spots from far left to far right, never the same one twice in a row.
+ */
+function randomStartX() {
+  const spots = CONFIG.ball.spots;
+  const range = game.difficulty.startXRange;
+  let spot;
+  if (game.spot < 0) {
+    spot = Math.floor(Math.random() * spots); // first ball: any spot
+  } else {
+    spot = Math.floor(Math.random() * (spots - 1));
+    if (spot >= game.spot) spot++; // skip the spot we just used
+  }
+  game.spot = spot;
+  return -range + (spot / (spots - 1)) * 2 * range;
 }
 
 function updateTimer(dt) {
@@ -469,10 +734,21 @@ function boostOn(effect) {
   return effect === 'bigHoop' ? inventory.isActive('white') : inventory.isActive('orange');
 }
 
+/**
+ * The mode's moving-hoop rule, or null if the hoop never moves in this mode
+ * on this difficulty (e.g. Blitz only moves the hoop on Hard).
+ */
+function hoopRule() {
+  const rule = game.mode.movingHoop;
+  if (!rule) return null;
+  if (rule.difficulties && !rule.difficulties.includes(game.difficulty.id)) return null;
+  return rule;
+}
+
 /** How fast the hoop should slide, based on the mode's rules. */
 function hoopSpeed() {
-  if (game.state !== 'playing') return 0;
-  const rule = game.mode.movingHoop;
+  const rule = hoopRule();
+  if (game.state !== 'playing' || !rule) return 0;
   const value = game[rule.stat];
   if (value < rule.startAt) return 0;
   let speed = Math.min(G.hoopSpeedMax, rule.speedStart + (value - rule.startAt) * rule.speedPer);
@@ -522,18 +798,19 @@ function updateShot(dt) {
 
 function onMake(swish) {
   const shot = game.shot ?? { ballMultiplier: 1, greenMultiplier: 1, basket: null, ball: null };
-  const rule = game.mode.movingHoop;
-  const hoopStatBefore = game[rule.stat];
+  const rule = hoopRule();
+  const hoopStatBefore = rule ? game[rule.stat] : 0;
 
   game.shotOutcome = 'make';
   game.resetTimer = G.resetAfterMake;
   game.makes++;
-  game.lifetime[game.mode.id]++;
+  game.lifetime[game.mode.id][game.difficulty.id]++;
   game.streak++;
   game.bestStreak = Math.max(game.bestStreak, game.streak);
   if (ball.touchedBoard) game.bankShots++;
-  if (game.streak === G.fireStreak) game.fireCount++;
-  const onFireNow = game.streak >= G.fireStreak;
+  const fire = game.mode.fire;
+  if (fire && game.streak === G.fireStreak) game.fireCount++;
+  const onFireNow = fire && game.streak >= G.fireStreak;
 
   // Points: base (+ swish bonus), then every multiplier stacks.
   // `labels` explains the bonus to the player under the "+points" text.
@@ -553,8 +830,15 @@ function onMake(swish) {
     multiplier *= shot.greenMultiplier;
     labels.push({ text: `GREEN ${shot.greenMultiplier.toFixed(1)}×`, color: '#5ee05a' });
   }
-  const points = Math.round((G.pointsPerMake + (swish ? G.swishBonus : 0)) * multiplier);
-  game.score += points;
+  let points = Math.round((G.pointsPerMake + (swish ? G.swishBonus : 0)) * multiplier);
+  if (game.mode.streakScoring) {
+    // Free Throw: the score is simply your streak, and a record is saved right away
+    points = 1;
+    game.score = game.streak;
+    saveBest(game.bestStreak);
+  } else {
+    game.score += points;
+  }
 
   // Feedback
   const rim = project(hoop.x, hoop.rimY, hoop.z);
@@ -574,12 +858,12 @@ function onMake(swish) {
     audio.swish();
     effects.floatText(rim.x, rim.y - 85, 'SWISH!', { color: '#7ee8ff', size: 30 });
   }
-  if (game.streak === G.fireStreak) {
+  if (onFireNow && game.streak === G.fireStreak) {
     audio.fire();
     effects.shake(8);
     effects.floatText(view.width / 2, view.height * 0.5, 'ON FIRE!', { color: '#ff8a1f', size: 54, life: 1.4 });
   }
-  if (hoopStatBefore < rule.startAt && game[rule.stat] >= rule.startAt) {
+  if (rule && hoopStatBefore < rule.startAt && game[rule.stat] >= rule.startAt) {
     effects.floatText(view.width / 2, view.height * 0.58, 'HOOP ON THE MOVE!', { color: '#7aa2ff', size: 26, life: 1.6 });
   }
 }
@@ -590,10 +874,13 @@ function onMiss() {
   if (game.mode.endsOnMiss) {
     game.resetTimer += 0.4; // a beat longer so the miss sinks in
     effects.floatText(view.width / 2, view.height * 0.5, 'MISS', { color: '#ff5a5a', size: 54, life: 1.2 });
-  } else if (game.streak >= G.fireStreak) {
+  } else if (isOnFire()) {
     effects.floatText(view.width / 2, view.height * 0.5, 'FIRE’S OUT', { color: '#9aa7c7', size: 30 });
+  } else if (game.mode.streakScoring && game.streak >= 2) {
+    effects.floatText(view.width / 2, view.height * 0.5, `STREAK OVER · ${game.streak}`, { color: '#9aa7c7', size: 28 });
   }
   game.streak = 0;
+  if (game.mode.streakScoring) game.score = 0;
 }
 
 /** The shot is done: bring out a fresh ball, or end the game. */
@@ -625,22 +912,38 @@ function update(dt) {
   effects.update(dt);
 
   if (inGame()) {
-    const seconds = Math.ceil(game.timeLeft);
-    const friends = game.mode.passAndPlay;
-    const best = Math.max(game.best[game.mode.id][game.difficulty.id], game.score);
-    ui.updateHUD({
-      label: friends ? currentPlayer().name.toUpperCase() : 'SCORE',
-      score: game.score,
-      sub: friends ? `ROUND ${Math.floor(game.match.turn / friends.players) + 1} OF ${friends.roundsEach}` : `BEST ${best}`,
-      lifetime: game.lifetime[game.mode.id],
-      center: game.mode.timed ? seconds : `RUN ${game.makes}`,
-      lowTime: game.mode.timed && seconds <= 10,
-      streak: game.streak,
-      onFire: isOnFire(),
-    });
+    ui.updateHUD(hudInfo());
     if (game.mode.powerUps) ui.renderTrays(inventory, ball.state !== 'ready');
   }
   ui.setHint(game.state === 'playing' && game.shots === 0 && ball.state === 'ready');
+}
+
+/** What the in-game HUD shows, depending on the mode. */
+function hudInfo() {
+  const mode = game.mode;
+  const seconds = Math.ceil(game.timeLeft);
+  const best = Math.max(game.best[mode.id][game.difficulty.id], gameResult());
+  const info = {
+    label: 'SCORE',
+    score: game.score,
+    sub: `BEST ${best}`,
+    lifetime: game.lifetime[mode.id][game.difficulty.id],
+    center: mode.timed ? seconds : `RUN ${game.makes}`,
+    lowTime: mode.timed && seconds <= 10,
+    streak: game.streak,
+    onFire: isOnFire(),
+    endButton: !!mode.endless,
+  };
+  if (mode.passAndPlay) {
+    info.label = currentPlayer().name.toUpperCase();
+    info.sub = `ROUND ${Math.floor(game.match.turn / mode.passAndPlay.players) + 1} OF ${mode.passAndPlay.roundsEach}`;
+  } else if (mode.online) {
+    Object.assign(info, { label: 'YOU', sub: `VS ${game.challenge.opponent.toUpperCase()}` });
+  } else if (mode.streakScoring) {
+    // Free Throw: the big number already IS the streak
+    Object.assign(info, { label: 'STREAK', sub: `RECORD ${best}`, center: `${game.makes}/${game.shots}`, streak: 0 });
+  }
+  return info;
 }
 
 /**
@@ -715,6 +1018,9 @@ function frame(now) {
 applyDifficulty(game.difficulty.id);
 showHome();
 requestAnimationFrame(frame);
+// If you're logged in: check for challenges waiting on you, and back up your records
+refreshOnline();
+syncScores();
 
 // Handy for debugging in the browser console, e.g. ballin.inventory.add('gold', 5)
-window.ballin = { game, ball, hoop, inventory, missions, CONFIG };
+window.ballin = { game, ball, hoop, inventory, missions, online, CONFIG };

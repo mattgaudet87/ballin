@@ -2,3 +2,7 @@
 .vercel
 __pycache__/
 .claude/settings.local.json
+.env.local
+.env*.local
+.local/
+node_modules/

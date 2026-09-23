@@ -5,7 +5,7 @@
   <!-- No zooming, and let the game draw under the iPhone notch -->
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>Ballin'</title>
-  <meta name="description" content="Flick basketball. Blitz, Hot Hand and pass-and-play with friends." />
+  <meta name="description" content="Flick basketball. Blitz, Hot Hand, Free Throw, and play your friends online or pass and play." />
   <meta name="theme-color" content="#070b18" />
 
   <!-- Home-screen app settings (iPhone) -->
@@ -55,6 +55,9 @@
       </svg>
     </button>
 
+    <!-- Free Throw only: finish the session (there's no clock and no way to lose) -->
+    <button id="end-btn" class="hidden" type="button">END</button>
+
     <div id="hint" class="hidden">
       <span class="hint-arrow">↑</span>
       Swipe up to shoot
@@ -72,6 +75,7 @@
       <div class="panel">
         <h1 class="title">BALLIN'</h1>
         <p class="tagline">Flick to shoot. Aim is everything.</p>
+        <p class="lifetime-total">🏀 <b id="lifetime-total">0</b> lifetime baskets</p>
 
         <div class="difficulty-picker" role="radiogroup" aria-label="Difficulty">
           <button type="button" data-difficulty="easy">Easy</button>
@@ -83,7 +87,7 @@
           <button class="mode-card" data-mode="blitz" type="button">
             <span class="mode-icon">⏱</span>
             <span class="mode-name">BLITZ</span>
-            <span class="mode-desc">60 seconds. Score all you can.</span>
+            <span class="mode-desc">60 seconds. Score all you can. Moving hoop on Hard.</span>
             <span class="mode-stats"><span>BEST <b data-best="blitz">0</b></span><span>🏀 <b data-lifetime="blitz">0</b></span></span>
           </button>
           <button class="mode-card hot" data-mode="hothand" type="button">
@@ -91,6 +95,18 @@
             <span class="mode-name">HOT HAND</span>
             <span class="mode-desc">One miss ends it. Multipliers, missions &amp; power-ups.</span>
             <span class="mode-stats"><span>BEST <b data-best="hothand">0</b></span><span>🏀 <b data-lifetime="hothand">0</b></span></span>
+          </button>
+          <button class="mode-card freethrow" data-mode="freethrow" type="button">
+            <span class="mode-icon">🎯</span>
+            <span class="mode-name">FREE THROW</span>
+            <span class="mode-desc">No clock, no losing. How many in a row?</span>
+            <span class="mode-stats"><span>RECORD <b data-best="freethrow">0</b></span><span>🏀 <b data-lifetime="freethrow">0</b></span></span>
+          </button>
+          <button class="mode-card online" data-mode="online" type="button">
+            <span class="mode-icon">🌐</span>
+            <span class="mode-name">ONLINE</span>
+            <span class="mode-desc">Add friends by username and challenge them.</span>
+            <span class="mode-stats"><span id="online-status">SIGN IN</span></span>
           </button>
           <button class="mode-card friends wide" data-mode="friends" type="button">
             <span class="mode-icon">👥</span>
@@ -100,7 +116,7 @@
           </button>
         </div>
 
-        <p class="how">Swipe up on the ball to shoot · Swish = bonus point · 3 in a row = on fire (2×)</p>
+        <p class="how">Swipe up on the ball to shoot · Swish = bonus point · 3 in a row = on fire (2×) · 🏀 on each card counts baskets on this difficulty</p>
       </div>
     </section>
 
@@ -154,6 +170,53 @@
       </div>
     </section>
 
+    <!-- Online: log in / sign up, then friends and challenges -->
+    <section id="online-screen" class="overlay scroll hidden">
+      <div class="panel">
+        <button class="back-btn" type="button" data-back aria-label="Back">‹</button>
+        <h1 class="mode-title online-text">ONLINE</h1>
+
+        <!-- Shown when logged out -->
+        <form id="auth-form" class="hidden" autocomplete="on">
+          <p class="tagline">Make an account to add friends, challenge them and save your scores.</p>
+          <div class="name-fields">
+            <label>Username<input id="auth-username" type="text" maxlength="16" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" /></label>
+            <label>Password<input id="auth-password" type="password" autocomplete="current-password" /></label>
+          </div>
+          <p id="auth-error" class="form-error hidden"></p>
+          <div class="btn-row">
+            <button id="login-btn" class="ghost-btn" type="submit">LOG IN</button>
+            <button id="signup-btn" class="big-btn" type="button">SIGN UP</button>
+          </div>
+          <p class="how">Usernames: 3–16 letters, numbers or _. Passwords: 6+ characters.</p>
+        </form>
+
+        <!-- Shown when logged in -->
+        <div id="account-block" class="hidden">
+          <p class="tagline">Logged in as <b id="account-name"></b> · <button id="logout-btn" class="link-btn" type="button">Log out</button></p>
+
+          <div class="difficulty-picker" role="radiogroup" aria-label="Difficulty">
+            <button type="button" data-difficulty="easy">Easy</button>
+            <button type="button" data-difficulty="normal">Normal</button>
+            <button type="button" data-difficulty="hard">Hard</button>
+          </div>
+
+          <h2 class="section-title">Challenges</h2>
+          <div id="challenge-list" class="online-list"></div>
+
+          <h2 class="section-title">Friends</h2>
+          <form id="add-friend-form" class="add-friend">
+            <input id="friend-username" type="text" maxlength="16" placeholder="Friend’s username" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" />
+            <button class="big-btn" type="submit">ADD</button>
+          </form>
+          <p id="online-error" class="form-error hidden"></p>
+          <div id="friend-list" class="online-list"></div>
+
+          <p class="how">A challenge is one 60-second Blitz each, on the difficulty picked above. Play yours now, your friend plays theirs whenever. Higher score wins.</p>
+        </div>
+      </div>
+    </section>
+
     <!-- Blitz with Friends: pass the phone between rounds -->
     <section id="handoff-screen" class="overlay hidden">
       <div class="panel">
@@ -184,6 +247,7 @@
         <p id="gameover-title" class="eyebrow">TIME'S UP</p>
         <div id="final-score" class="final-score">0</div>
         <div id="new-best" class="new-best hidden">NEW BEST!</div>
+        <p id="gameover-note" class="gameover-note hidden"></p>
         <div class="best-pill">BEST <strong id="stat-best">0</strong> · 🏀 <strong id="stat-lifetime">0</strong></div>
         <div class="stats">
           <div><span id="stat-makes">0/0</span><small>Makes</small></div>

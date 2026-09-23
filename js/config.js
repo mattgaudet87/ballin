@@ -17,12 +17,14 @@ export const CONFIG = {
 
   ball: {
     radius: 0.12,
-    // Where the ball rests before each shot. During a game its x is picked at
-    // random (how far depends on the difficulty, see modes.js), so every
-    // shot needs fresh aiming.
+    // Where the ball rests before each shot, low in front of the camera.
+    // During a game it starts on one of `spots` evenly spaced x positions
+    // (how wide depends on the difficulty, see modes.js), never the same spot
+    // twice in a row, so every shot needs fresh aiming.
     startX: 0,
-    startY: 2.2,
+    startY: 0.4,
     startZ: 0,
+    spots: 8,
     backspin: -11, // radians per second (negative = backspin, like a real jumper)
   },
 
@@ -43,14 +45,15 @@ export const CONFIG = {
   },
 
   camera: {
-    // A low camera just above rim height, behind the ball, looking almost
-    // straight at the hoop (like GamePigeon's flick basketball).
-    y: 3.5,
-    z: -2.5,
+    // A LOW camera (about knee-to-waist height) right behind the ball, looking
+    // up at the hoop, like GamePigeon's flick basketball. The ball looks big
+    // at the bottom and you see the floor stretch away to the wall.
+    y: 1.0,
+    z: -1.0,
     // The camera zoom is calculated automatically so that the resting ball
     // and the rim land on these spots (fractions of the screen height).
-    ballScreenY: 0.82,
-    rimScreenY: 0.37,
+    ballScreenY: 0.85,
+    rimScreenY: 0.35,
   },
 
   physics: {
@@ -100,12 +103,14 @@ export const CONFIG = {
 
   storageKeys: {
     best: 'ballin.best.', // + mode + '.' + difficulty, e.g. 'ballin.best.blitz.hard'
-    baskets: 'ballin.baskets.', // + mode: lifetime baskets made
+    baskets: 'ballin.baskets.', // + mode + '.' + difficulty: lifetime baskets made
     difficulty: 'ballin.difficulty',
     playerNames: 'ballin.playerNames',
     oldBest: 'ballin.bestScore', // from the very first version (Blitz on Hard)
     muted: 'ballin.muted',
     inventory: 'ballin.inventory',
     missions: 'ballin.missions',
+    account: 'ballin.account', // online login: { username, token }
+    recordsOwner: 'ballin.recordsOwner', // which account the saved records on this device belong to
   },
 };

@@ -187,6 +187,26 @@ body {
   color: var(--muted);
 }
 
+/* END button (Free Throw), just under the mute button */
+#end-btn {
+  position: absolute;
+  top: calc(var(--safe-top) + 66px);
+  right: 14px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  z-index: 20;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
 /* --- Tap to start --------------------------------------------------------- */
 
 .tap-start {
@@ -429,6 +449,22 @@ body {
   color: var(--muted);
   font-size: 15px;
   font-weight: 600;
+}
+
+.lifetime-total {
+  display: inline-block;
+  margin: -8px 0 16px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.lifetime-total b {
+  color: #fff;
 }
 
 .modes {
@@ -805,6 +841,16 @@ body {
   grid-column: 1 / -1;
 }
 
+.mode-card.freethrow {
+  background: linear-gradient(160deg, #2fd6a0, #108a64);
+  box-shadow: 0 10px 28px rgba(47, 214, 160, 0.35), inset 0 -4px 0 rgba(0, 0, 0, 0.18);
+}
+
+.mode-card.online {
+  background: linear-gradient(160deg, #26c6f2, #1273b8);
+  box-shadow: 0 10px 28px rgba(38, 198, 242, 0.35), inset 0 -4px 0 rgba(0, 0, 0, 0.18);
+}
+
 .mode-card.friends {
   background: linear-gradient(160deg, #b36bff, #6b2fd6);
   box-shadow: 0 10px 28px rgba(140, 80, 255, 0.4), inset 0 -4px 0 rgba(0, 0, 0, 0.18);
@@ -905,7 +951,8 @@ body {
 }
 
 /* Text boxes must be selectable/typeable even though the page locks selection */
-.name-fields input {
+.name-fields input,
+.add-friend input {
   padding: 14px 16px;
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 14px;
@@ -921,6 +968,11 @@ body {
 
 .name-fields input:focus {
   outline: 2px solid #b36bff;
+}
+
+#online-screen .name-fields input:focus,
+.add-friend input:focus {
+  outline: 2px solid #26c6f2;
 }
 
 .handoff-pass {
@@ -996,6 +1048,150 @@ body {
   background-clip: text;
   color: transparent;
   animation: pop 0.6s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+/* --- Online screen ------------------------------------------------------------ */
+
+.online-text {
+  background: linear-gradient(180deg, #c8f3ff, #26c6f2);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.link-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #7fdcff;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.form-error {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(255, 90, 90, 0.15);
+  color: #ff9a9a;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.add-friend {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.add-friend input {
+  min-width: 0;
+}
+
+.add-friend .big-btn {
+  width: auto;
+  padding: 0 18px;
+  font-size: 15px;
+  background: linear-gradient(180deg, #7fdcff, #1c9fd6);
+  box-shadow: 0 8px 22px rgba(38, 198, 242, 0.35), inset 0 -3px 0 rgba(0, 0, 0, 0.15);
+}
+
+.online-list {
+  display: grid;
+  gap: 8px;
+}
+
+.online-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 10px 10px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  text-align: left;
+}
+
+/* Colored stripe on the left of each challenge */
+.online-row.yourTurn { box-shadow: inset 4px 0 0 #ffb347; background: rgba(255, 179, 71, 0.12); }
+.online-row.won { box-shadow: inset 4px 0 0 #4be08a; }
+.online-row.lost { box-shadow: inset 4px 0 0 #ff5a5a; }
+.online-row.tie,
+.online-row.waiting,
+.online-row.declined { box-shadow: inset 4px 0 0 rgba(255, 255, 255, 0.25); }
+
+.online-who {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.online-who b {
+  font-size: 16px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.online-who small {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.row-btn {
+  flex: none;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(38, 198, 242, 0.2);
+  color: #9fe6ff;
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.row-btn.go {
+  background: linear-gradient(180deg, var(--accent-light), var(--accent));
+  color: #fff;
+}
+
+.row-x {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.list-empty {
+  margin: 0;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* Online challenge result under the final score */
+.gameover-note {
+  margin: 0 0 14px;
+  font-size: 17px;
+  font-weight: 800;
+  color: #9fe6ff;
 }
 
 /* --- Reward popup ----------------------------------------------------------- */
