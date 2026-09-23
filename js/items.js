@@ -10,6 +10,10 @@
  *                    each kind at the same time. If a game ends mid-boost, the
  *                    remaining shots carry over to your next game.
  *
+ * Every difficulty (Easy / Normal / Hard) has its OWN locker: items earned on
+ * Easy can only be used on Easy, and so on. setDifficulty() switches which
+ * locker the Inventory is showing and using.
+ *
  * To add an item: add it to ITEMS (and to BALL_IDS or DRINK_IDS), add its
  * effect in Inventory.startShot() / main.js, and give it an icon in style.css.
  */
@@ -37,22 +41,42 @@ export const DRINK_EFFECTS = {
   slowHoopFactor: 0.75, // Orange: moving hoop speed × this
 };
 
-/** What a brand-new player starts with, so they can discover power-ups. */
+/** What each new locker starts with, so players can discover power-ups. */
 const STARTER_PACK = { bronze: 1, white: 1, green: 1 };
 
+/** A fresh locker: starter items and no active drinks. */
+function newLocker(counts = STARTER_PACK) {
+  const locker = { counts: {}, active: {} };
+  for (const id of Object.keys(ITEMS)) locker.counts[id] = counts[id] ?? 0;
+  return locker;
+}
+
 export class Inventory {
-  constructor() {
+  constructor(difficultyId = 'normal') {
     const saved = loadJSON(CONFIG.storageKeys.inventory, null);
-    this.counts = {};
-    for (const id of Object.keys(ITEMS)) this.counts[id] = saved?.counts?.[id] ?? STARTER_PACK[id] ?? 0;
-    // Active drinks: { white: { shotsLeft: 7, used: 3 }, ... }
-    this.active = saved?.active ?? {};
+    // One locker per difficulty: { easy: { counts, active }, normal: ..., hard: ... }
+    this.lockers = saved?.lockers ?? {};
+    // Older versions had a single shared locker; it becomes the Normal locker.
+    if (saved?.counts && !saved.lockers) {
+      this.lockers.normal = { counts: newLocker(saved.counts).counts, active: saved.active ?? {} };
+    }
     this.selectedBall = null; // id of the specialty ball loaded for the next shot
-    if (!saved) this.save();
+    this.setDifficulty(difficultyId);
+  }
+
+  /** Switch to the locker for this difficulty (creating it if it's new). */
+  setDifficulty(difficultyId) {
+    if (!this.lockers[difficultyId]) this.lockers[difficultyId] = newLocker();
+    this.difficultyId = difficultyId;
+    // counts: { gold: 2, ... }   active drinks: { white: { shotsLeft: 7, used: 3 }, ... }
+    this.counts = this.lockers[difficultyId].counts;
+    this.active = this.lockers[difficultyId].active;
+    this.selectedBall = null;
+    this.save();
   }
 
   save() {
-    saveJSON(CONFIG.storageKeys.inventory, { counts: this.counts, active: this.active });
+    saveJSON(CONFIG.storageKeys.inventory, { lockers: this.lockers });
   }
 
   count(id) {

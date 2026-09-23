@@ -7,10 +7,11 @@ well commented and consistent with what's already here.
 
 ## Running it
 
-ES modules don't load from `file://`, so serve the folder:
+ES modules don't load from `file://`, so serve the folder. tools/serve.py is a plain static
+server that sends `Cache-Control: no-store`, so a normal refresh always loads the latest code:
 
 ```
-python3 -m http.server 8000
+python3 tools/serve.py
 ```
 
 Then open http://localhost:8000. (`.claude/launch.json` has this as the `ballin` preview config.)
@@ -47,8 +48,11 @@ js/
   The ball rests at z = 0 and the rim is at `CONFIG.hoop.z`. Everything is simulated
   in 3D and only turned into pixels by `camera.project()` when drawing. That's how the
   ball shrinks as it flies away.
-- **Game states** (`game.state` in main.js): `menu` → `playing` → `gameover`.
-  There is no countdown: tapping Play (or I'm Ready) starts the game instantly.
+- **Game states** (`game.state` in main.js): `menu` → `waiting` → `playing` → `gameover`.
+  There is no countdown anywhere. `startGame()` sets everything up in `waiting` and shows the
+  "Tap to start" screen (`#tap-start`). One tap calls `beginPlay()`, which starts the clock.
+  Blitz with Friends skips it (`tapToStart: false`) because the handoff screen's
+  I'm Ready button already is the tap to start. `inGame()` is true in both `waiting` and `playing`.
 - **Screens:** home (difficulty picker + 3 mode cards) → Blitz starts right away.
   Hot Hand opens its hub (play, missions, locker). Blitz with Friends opens the setup
   screen (names), then handoff → round → handoff … → results. Only one `.overlay`
@@ -78,6 +82,10 @@ js/
   and game over.
 - **Scoring** (`onMake()` in main.js): (1 + swish bonus) × fire 2× × basket multiplier ×
   specialty ball × Green Monster multiplier, rounded. Each extra multiplier shows as a label under "+N".
+- **Lockers are per difficulty:** `Inventory` keeps `lockers.easy/normal/hard`, and
+  `applyDifficulty()` calls `inventory.setDifficulty(id)` so `counts`/`active` point at the
+  right one. Mission rewards go into the locker of the difficulty chosen when you tap
+  Collect. Each new locker gets the starter pack.
 - **Power-ups** (items.js + `useItem()`/`shoot()` in main.js): tapping a ball in the left tray
   loads it (`inventory.selectedBall`, `ball.skin`), and it's consumed when you shoot. Tapping a
   drink activates it for 10 shots. `inventory.startShot()` returns a snapshot (`game.shot`)

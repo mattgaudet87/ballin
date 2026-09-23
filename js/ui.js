@@ -68,6 +68,9 @@ export class UI {
       ballTray: $('ball-tray'),
       drinkTray: $('drink-tray'),
       muteBtn: $('mute-btn'),
+      tapStart: $('tap-start'),
+      tapStartMode: $('tap-start-mode'),
+      lockerTitle: $('locker-title'),
     };
     // Remember what's on screen so we only touch the page when something changes
     this.shown = {};
@@ -123,6 +126,11 @@ export class UI {
     }
   }
 
+  /** The "Tap to start" screen was tapped. */
+  onTapToStart(callback) {
+    this.el.tapStart.addEventListener('click', callback);
+  }
+
   onMute(callback) {
     this.el.muteBtn.addEventListener('click', callback);
   }
@@ -153,6 +161,16 @@ export class UI {
       $(SCREENS[name]).scrollTop = 0;
       this.hideGameHUD();
     }
+  }
+
+  /** Is this menu screen currently visible? */
+  isShowing(name) {
+    return !$(SCREENS[name]).classList.contains('hidden');
+  }
+
+  /** Each difficulty has its own locker, so say which one this is. */
+  setLockerTitle(difficultyName) {
+    this.el.lockerTitle.textContent = `${difficultyName} locker`;
   }
 
   /** Highlight the chosen difficulty in every picker. */
@@ -271,7 +289,18 @@ export class UI {
     this.shown = {};
   }
 
+  /** Show the "Tap to start" screen over the court, e.g. "Hot Hand · Easy". */
+  showTapToStart(label) {
+    this.el.tapStartMode.textContent = label.toUpperCase();
+    show(this.el.tapStart);
+  }
+
+  hideTapToStart() {
+    hide(this.el.tapStart);
+  }
+
   hideGameHUD() {
+    hide(this.el.tapStart);
     hide(this.el.hud);
     hide(this.el.hint);
     hide(this.el.ballTray);

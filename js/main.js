@@ -3,7 +3,7 @@
  * ---------------------------------------------------------------------------
  * The "conductor" of the game. It:
  *   1. sets up the canvas (sharp on Retina screens) and all the game objects
- *   2. runs the game-state machine: 'menu' → 'playing' → 'gameover'
+ *   2. runs the game-state machine: 'menu' → 'waiting' (tap to start) → 'playing' → 'gameover'
  *   3. runs the main loop ~60 times a second: update() then render()
  *   4. applies the game RULES: scoring, streaks, on fire, the clock, power-ups,
  *      basket multipliers and missions
@@ -50,12 +50,13 @@ const hoop = new Hoop();
 const effects = new Effects();
 const audio = new SoundFX();
 const ui = new UI();
+// (the locker is picked once the difficulty is known, in applyDifficulty)
 const inventory = new Inventory();
 const missions = new Missions();
 
 /** Everything about the current game session. */
 const game = {
-  state: 'menu', // 'menu' | 'playing' | 'gameover'
+  state: 'menu', // 'menu' | 'waiting' | 'playing' | 'gameover'
   mode: MODES.blitz,
   difficulty: DIFFICULTIES[loadJSON(KEYS.difficulty, 'normal')] ?? DIFFICULTIES.normal,
   best: loadBests(), // best[modeId][difficultyId]
@@ -138,10 +139,13 @@ function resize() {
 function applyDifficulty(id) {
   game.difficulty = DIFFICULTIES[id];
   saveJSON(KEYS.difficulty, id);
+  inventory.setDifficulty(id); // each difficulty has its own locker
   hoop.setDistance(game.difficulty.hoopZ, game.difficulty.hoopRange);
   resize();
   ui.setDifficulty(id);
   ui.setRecords(currentBests(), game.lifetime);
+  ui.setLockerTitle(game.difficulty.name);
+  if (ui.isShowing('hothand')) ui.renderHotHandHub(missionViews(), inventory);
 }
 
 window.addEventListener('resize', resize);
@@ -187,7 +191,9 @@ ui.onDifficulty(applyDifficulty);
 ui.onHome(showHome);
 ui.onHotHandPlay(() => startGame('hothand'));
 ui.onFriendsStart(startMatch);
-ui.onHandoffReady(() => startGame('friends'));
+// The handoff screen's "I'm ready" button already is the tap to start
+ui.onHandoffReady(() => startGame('friends', { tapToStart: false }));
+ui.onTapToStart(beginPlay);
 ui.onRematch(() => startMatch(game.match.players.map((p) => p.name)));
 ui.onPlayAgain(() => startGame(game.mode.id));
 ui.onCollect(collectReward);
@@ -213,7 +219,7 @@ function shoot(swipe) {
 
 /** The player tapped a power-up in the in-game tray. */
 function useItem(id) {
-  if (game.state !== 'playing' || !game.mode.powerUps) return;
+  if (!inGame() || !game.mode.powerUps) return;
   const item = ITEMS[id];
 
   if (item.type === 'ball') {
@@ -316,12 +322,16 @@ function endRound() {
 
 // --- Playing -------------------------------------------------------------------
 
-function startGame(modeId) {
+/**
+ * Set up a new game. No countdown: it waits on a "Tap to start" screen
+ * (or starts right away with tapToStart: false).
+ */
+function startGame(modeId, { tapToStart = true } = {}) {
   audio.unlock();
   const mode = MODES[modeId];
   Object.assign(game, {
     mode,
-    state: 'playing', // no countdown: the tap on Play starts the game
+    state: 'waiting', // → 'playing' in beginPlay()
     // In Blitz with Friends each round continues the player's running total
     score: mode.passAndPlay ? currentPlayer().total : 0,
     streak: 0,
@@ -340,7 +350,22 @@ function startGame(modeId) {
   effects.reset();
   newBall();
   ui.showGame({ powerUps: mode.powerUps });
+  if (tapToStart) ui.showTapToStart(`${mode.name} · ${game.difficulty.name}`);
+  else beginPlay();
+}
+
+/** The player tapped to start: the clock (if any) starts now. */
+function beginPlay() {
+  if (game.state !== 'waiting') return;
+  game.state = 'playing';
+  ui.hideTapToStart();
+  audio.unlock();
   audio.start();
+}
+
+/** True during a game, including the "Tap to start" moment before it begins. */
+function inGame() {
+  return game.state === 'playing' || game.state === 'waiting';
 }
 
 function endGame() {
@@ -403,14 +428,13 @@ function timeIsUp() {
 
 /** Bring out a fresh ball (random spot in a game, centered in menus). */
 function newBall() {
-  const inGame = game.state === 'playing';
   const range = game.difficulty.startXRange;
-  ball.reset(inGame ? (Math.random() * 2 - 1) * range : CONFIG.ball.startX);
-  ball.skin = inGame && game.mode.powerUps ? inventory.selectedBall : null;
+  ball.reset(inGame() ? (Math.random() * 2 - 1) * range : CONFIG.ball.startX);
+  ball.skin = inGame() && game.mode.powerUps ? inventory.selectedBall : null;
   game.shot = null;
 
   // Hot Hand: maybe put a multiplier on the next basket
-  game.basketMultiplier = inGame && game.mode.basketMultipliers ? rollBasketMultiplier() : null;
+  game.basketMultiplier = inGame() && game.mode.basketMultipliers ? rollBasketMultiplier() : null;
   if (game.basketMultiplier?.value >= 5) audio.rareMultiplier();
 }
 
@@ -440,7 +464,7 @@ function updateTimer(dt) {
  * power-ups it was shot with, so a boost can't run out mid-flight.
  */
 function boostOn(effect) {
-  if (game.state !== 'playing' || !game.mode.powerUps) return false;
+  if (!inGame() || !game.mode.powerUps) return false;
   if (game.shot) return game.shot[effect];
   return effect === 'bigHoop' ? inventory.isActive('white') : inventory.isActive('orange');
 }
@@ -600,7 +624,7 @@ function update(dt) {
   }
   effects.update(dt);
 
-  if (game.state === 'playing') {
+  if (inGame()) {
     const seconds = Math.ceil(game.timeLeft);
     const friends = game.mode.passAndPlay;
     const best = Math.max(game.best[game.mode.id][game.difficulty.id], game.score);
@@ -646,7 +670,7 @@ function render(time) {
   ball.drawShadow(ctx);
 
   // Hot Hand multiplier badge floats above the backboard
-  if (game.basketMultiplier && game.state === 'playing') {
+  if (game.basketMultiplier && inGame()) {
     hoop.drawBadge(ctx, `${game.basketMultiplier.value}×`, game.basketMultiplier.color, time);
   }
 

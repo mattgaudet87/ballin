@@ -60,6 +60,13 @@
       Swipe up to shoot
     </div>
 
+    <!-- "Tap to start" screen shown before every Blitz / Hot Hand game -->
+    <button id="tap-start" class="tap-start hidden" type="button">
+      <span id="tap-start-mode" class="eyebrow">BLITZ · NORMAL</span>
+      <span class="tap-start-text">TAP TO START</span>
+      <span class="tap-start-sub">Swipe up on the ball to shoot</span>
+    </button>
+
     <!-- Home screen: pick a difficulty and a mode -->
     <section id="home-screen" class="overlay scroll">
       <div class="panel">
@@ -119,7 +126,7 @@
         <h2 class="section-title">Missions</h2>
         <div id="hub-missions" class="missions"></div>
 
-        <h2 class="section-title">Locker</h2>
+        <h2 id="locker-title" class="section-title">Locker</h2>
         <div id="locker" class="locker"></div>
         <p class="how">Tap power-ups on the sides of the screen during a run.</p>
       </div>

@@ -36,7 +36,8 @@ is a surprise: finish one, tap **Collect reward**, and find out what you won.
 | Orange Monster | Moving hoop 25% slower for 10 shots |
 | Blue Monster | Coin booster (coming soon) |
 
-Drinks are in the right tray. You can run one of each kind at once, and any shots left
+Easy, Normal and Hard each have their **own locker**, so power-ups earned on one difficulty
+are used on that difficulty. Drinks are in the right tray. You can run one of each kind at once, and any shots left
 when a game ends carry over to your next game.
 
 Built with plain HTML, CSS and JavaScript on an HTML5 canvas. There are no frameworks,
@@ -51,7 +52,7 @@ You need a tiny local web server. Python comes with macOS, so:
 2. Start the server:
 
    ```bash
-   python3 -m http.server 8000
+   python3 tools/serve.py
    ```
 
 3. Open **http://localhost:8000** in your browser.
