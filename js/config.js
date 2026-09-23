@@ -86,7 +86,6 @@ export const CONFIG = {
 
   // Rules shared by every mode. Mode-specific rules live in modes.js.
   game: {
-    countdownFrom: 3,
     pointsPerMake: 1,
     swishBonus: 1, // extra points for touching nothing but net
     fireStreak: 3, // makes in a row needed to catch fire

@@ -160,10 +160,10 @@ export class SoundFX {
     });
   }
 
-  /** Countdown beep. `go` = the higher, longer final beep. */
-  beep(go = false) {
+  /** Beep when a game starts. */
+  start() {
     if (!this.ready()) return;
-    this.tone({ freq: go ? 988 : 660, type: 'square', duration: go ? 0.35 : 0.12, volume: 0.12 });
+    this.tone({ freq: 988, type: 'square', duration: 0.35, volume: 0.12 });
   }
 
   /** Clock tick for the last few seconds. */

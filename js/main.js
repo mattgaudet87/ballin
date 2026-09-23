@@ -3,7 +3,7 @@
  * ---------------------------------------------------------------------------
  * The "conductor" of the game. It:
  *   1. sets up the canvas (sharp on Retina screens) and all the game objects
- *   2. runs the game-state machine: 'menu' → 'countdown' → 'playing' → 'gameover'
+ *   2. runs the game-state machine: 'menu' → 'playing' → 'gameover'
  *   3. runs the main loop ~60 times a second: update() then render()
  *   4. applies the game RULES: scoring, streaks, on fire, the clock, power-ups,
  *      basket multipliers and missions
@@ -55,7 +55,7 @@ const missions = new Missions();
 
 /** Everything about the current game session. */
 const game = {
-  state: 'menu', // 'menu' | 'countdown' | 'playing' | 'gameover'
+  state: 'menu', // 'menu' | 'playing' | 'gameover'
   mode: MODES.blitz,
   difficulty: DIFFICULTIES[loadJSON(KEYS.difficulty, 'normal')] ?? DIFFICULTIES.normal,
   best: loadBests(), // best[modeId][difficultyId]
@@ -75,8 +75,6 @@ const game = {
   itemsUsed: 0,
 
   timeLeft: 0,
-  countdown: 0,
-  countdownShown: null,
   shotOutcome: null, // null while the ball is still "live", then 'make' | 'miss'
   resetTimer: 0,
   basketMultiplier: null, // Hot Hand bonus on the current basket, e.g. { value: 3, color }
@@ -215,7 +213,7 @@ function shoot(swipe) {
 
 /** The player tapped a power-up in the in-game tray. */
 function useItem(id) {
-  if ((game.state !== 'playing' && game.state !== 'countdown') || !game.mode.powerUps) return;
+  if (game.state !== 'playing' || !game.mode.powerUps) return;
   const item = ITEMS[id];
 
   if (item.type === 'ball') {
@@ -323,7 +321,7 @@ function startGame(modeId) {
   const mode = MODES[modeId];
   Object.assign(game, {
     mode,
-    state: 'countdown',
+    state: 'playing', // no countdown: the tap on Play starts the game
     // In Blitz with Friends each round continues the player's running total
     score: mode.passAndPlay ? currentPlayer().total : 0,
     streak: 0,
@@ -336,14 +334,13 @@ function startGame(modeId) {
     bigMultiplierMakes: 0,
     itemsUsed: 0,
     timeLeft: mode.duration,
-    countdown: G.countdownFrom,
-    countdownShown: null,
     shotOutcome: null,
   });
   hoop.reset();
   effects.reset();
   newBall();
   ui.showGame({ powerUps: mode.powerUps });
+  audio.start();
 }
 
 function endGame() {
@@ -406,7 +403,7 @@ function timeIsUp() {
 
 /** Bring out a fresh ball (random spot in a game, centered in menus). */
 function newBall() {
-  const inGame = game.state === 'playing' || game.state === 'countdown';
+  const inGame = game.state === 'playing';
   const range = game.difficulty.startXRange;
   ball.reset(inGame ? (Math.random() * 2 - 1) * range : CONFIG.ball.startX);
   ball.skin = inGame && game.mode.powerUps ? inventory.selectedBall : null;
@@ -415,24 +412,6 @@ function newBall() {
   // Hot Hand: maybe put a multiplier on the next basket
   game.basketMultiplier = inGame && game.mode.basketMultipliers ? rollBasketMultiplier() : null;
   if (game.basketMultiplier?.value >= 5) audio.rareMultiplier();
-}
-
-function updateCountdown(dt) {
-  if (game.state !== 'countdown') return;
-  game.countdown -= dt;
-  const number = Math.ceil(game.countdown);
-  if (number !== game.countdownShown) {
-    game.countdownShown = number;
-    if (number > 0) {
-      ui.showCountdown(number);
-      audio.beep();
-    } else {
-      ui.showCountdown('GO!');
-      audio.beep(true);
-      game.state = 'playing';
-      setTimeout(() => ui.hideCountdown(), 600);
-    }
-  }
 }
 
 function updateTimer(dt) {
@@ -461,7 +440,7 @@ function updateTimer(dt) {
  * power-ups it was shot with, so a boost can't run out mid-flight.
  */
 function boostOn(effect) {
-  if ((game.state !== 'playing' && game.state !== 'countdown') || !game.mode.powerUps) return false;
+  if (game.state !== 'playing' || !game.mode.powerUps) return false;
   if (game.shot) return game.shot[effect];
   return effect === 'bigHoop' ? inventory.isActive('white') : inventory.isActive('orange');
 }
@@ -609,7 +588,6 @@ function finishShot() {
 // ---------------------------------------------------------------------------
 
 function update(dt) {
-  updateCountdown(dt);
   updateTimer(dt);
   hoop.update(dt, hoopSpeed(), boostOn('bigHoop') ? DRINK_EFFECTS.bigHoopScale : 1);
   ball.update(dt);
@@ -622,7 +600,7 @@ function update(dt) {
   }
   effects.update(dt);
 
-  if (game.state === 'playing' || game.state === 'countdown') {
+  if (game.state === 'playing') {
     const seconds = Math.ceil(game.timeLeft);
     const friends = game.mode.passAndPlay;
     const best = Math.max(game.best[game.mode.id][game.difficulty.id], game.score);

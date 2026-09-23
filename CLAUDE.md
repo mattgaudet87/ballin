@@ -47,7 +47,8 @@ js/
   The ball rests at z = 0 and the rim is at `CONFIG.hoop.z`. Everything is simulated
   in 3D and only turned into pixels by `camera.project()` when drawing. That's how the
   ball shrinks as it flies away.
-- **Game states** (`game.state` in main.js): `menu` → `countdown` → `playing` → `gameover`.
+- **Game states** (`game.state` in main.js): `menu` → `playing` → `gameover`.
+  There is no countdown: tapping Play (or I'm Ready) starts the game instantly.
 - **Screens:** home (difficulty picker + 3 mode cards) → Blitz starts right away.
   Hot Hand opens its hub (play, missions, locker). Blitz with Friends opens the setup
   screen (names), then handoff → round → handoff … → results. Only one `.overlay`

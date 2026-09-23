@@ -5,7 +5,7 @@
  *   - menu screens: home, Hot Hand hub (missions + locker), friends setup,
  *     pass-the-phone handoff, friends results, game over
  *   - the reward popup
- *   - the in-game HUD, countdown, "swipe up" hint and power-up trays
+ *   - the in-game HUD, "swipe up" hint and power-up trays
  *   - the mute button
  *
  * The HTML skeleton lives in index.html and the styling in style.css. This
@@ -45,7 +45,6 @@ export class UI {
       timer: $('timer'),
       streak: $('streak'),
       hint: $('hint'),
-      countdown: $('countdown'),
       hubMissions: $('hub-missions'),
       locker: $('locker'),
       gameOverTitle: $('gameover-title'),
@@ -278,21 +277,6 @@ export class UI {
     hide(this.el.ballTray);
     hide(this.el.drinkTray);
     this.shown = {};
-  }
-
-  /** Show a big countdown number (or "GO!") with a pop animation. */
-  showCountdown(text) {
-    const el = this.el.countdown;
-    el.textContent = text;
-    show(el);
-    // Restart the CSS animation by removing and re-adding the class
-    el.classList.remove('pop');
-    void el.offsetWidth;
-    el.classList.add('pop');
-  }
-
-  hideCountdown() {
-    hide(this.el.countdown);
   }
 
   /**
