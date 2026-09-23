@@ -1,12 +1,30 @@
 # Ballin' 🏀
 
-A flick basketball game for your phone (and your Mac). Swipe up to shoot. You
-have 60 seconds on the clock.
+A flick basketball game for your phone (and your Mac). Swipe up on the ball to
+shoot. The ball starts in a different spot every time, so **aim is everything**.
 
-- **Swipe up** on the ball. A faster flick shoots further, and the angle of your swipe aims it.
-- **Swish** it (nothing but net) for a bonus point.
-- Make **3 in a row** to catch fire and score **double points**.
-- Reach **10 points** and the hoop starts sliding, and it speeds up as you score.
+## Modes
+
+- **Blitz:** 60 seconds on the clock. Score as many points as you can. Hit 10 points and the hoop starts sliding.
+- **Hot Hand:** no clock. Keep shooting until you miss once. Baskets randomly light up with
+  multipliers: **2×** (common), **3×**, **5×** (rare) and **10×** (very rare).
+
+In both modes a **swish** earns a bonus point and **3 in a row** sets you on fire for double points.
+
+## Missions & power-ups
+
+Three missions are always active, and you can see them between games. Finish one to earn power-ups:
+
+| Power-up | Effect |
+| --- | --- |
+| Gold / Silver / Bronze Ball | 3× / 2× / 1.5× points on one shot (tap it in the left tray before shooting) |
+| White Monster | Bigger hoop for 10 shots |
+| Green Monster | Multiplier that climbs every shot for 10 shots (1.2× → 3×) |
+| Orange Monster | Moving hoop 25% slower for 10 shots |
+| Blue Monster | Coin booster (coming soon) |
+
+Drinks are in the right tray. You can run one of each kind at once, and any shots left
+when a game ends carry over to your next game.
 
 Built with plain HTML, CSS and JavaScript on an HTML5 canvas. There are no frameworks,
 no build step and no dependencies.
@@ -55,7 +73,10 @@ This is a static site, so no configuration is needed:
 | `index.html` | The page, HUD and menus, plus the home-screen app tags |
 | `style.css` | Styling for everything except the canvas drawing |
 | `js/main.js` | Starts the game, runs the loop, applies the rules |
-| `js/config.js` | **Every tunable number.** Start here to change the feel |
+| `js/config.js` | **Tunable numbers.** Start here to change the feel |
+| `js/modes.js` | Blitz and Hot Hand rules, multiplier odds |
+| `js/items.js` | Specialty balls, energy drinks and your inventory |
+| `js/missions.js` | Mission types, targets and rewards |
 | `js/physics.js` | Shot aiming, gravity, bounces and scoring detection |
 | `js/ball.js`, `js/hoop.js`, `js/court.js` | The objects and how they're drawn |
 | `js/input.js` | Touch and mouse swipes |
@@ -63,7 +84,7 @@ This is a static site, so no configuration is needed:
 | `js/audio.js` | Sound effects made with the Web Audio API |
 | `js/effects.js` | Particles, fire, floating text |
 | `js/camera.js` | Turns 3D positions into screen positions |
-| `js/storage.js` | Saves your best score |
+| `js/storage.js` | Saves best scores, missions and power-ups |
 | `tools/make_icons.py` | Regenerates the app icons |
 
 See [CLAUDE.md](CLAUDE.md) for a deeper tour of how everything fits together and

@@ -41,3 +41,21 @@ export function saveBool(key, value) {
     // Storage unavailable — ignore.
   }
 }
+
+/** Load a saved object/array (stored as JSON text). */
+export function loadJSON(key, fallback) {
+  try {
+    const text = localStorage.getItem(key);
+    return text ? JSON.parse(text) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+export function saveJSON(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Storage unavailable — ignore.
+  }
+}

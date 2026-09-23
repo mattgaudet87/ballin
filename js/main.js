@@ -5,10 +5,11 @@
  *   1. sets up the canvas (sharp on Retina screens) and all the game objects
  *   2. runs the game-state machine: 'menu' → 'countdown' → 'playing' → 'gameover'
  *   3. runs the main loop ~60 times a second: update() then render()
- *   4. applies the game RULES: scoring, streaks, on fire, the timer
+ *   4. applies the game RULES: scoring, streaks, on fire, the clock, power-ups,
+ *      basket multipliers and missions
  *
- * The other modules each do one job (ball, hoop, physics, input, ui, audio,
- * effects, court) and main.js wires them together.
+ * The other modules each do one job and main.js wires them together.
+ * Mode rules live in modes.js, power-ups in items.js, missions in missions.js.
  */
 import { CONFIG } from './config.js';
 import { fitCamera, project } from './camera.js';
@@ -21,8 +22,12 @@ import { SoundFX } from './audio.js';
 import { Effects } from './effects.js';
 import { drawCourt } from './court.js';
 import { loadNumber, saveNumber } from './storage.js';
+import { MODES, rollBasketMultiplier } from './modes.js';
+import { Inventory, ITEMS, DRINK_EFFECTS } from './items.js';
+import { Missions } from './missions.js';
 
 const G = CONFIG.game;
+const KEYS = CONFIG.storageKeys;
 const PHYSICS_STEP = 1 / CONFIG.physics.stepsPerSecond;
 
 // ---------------------------------------------------------------------------
@@ -45,26 +50,46 @@ const hoop = new Hoop();
 const effects = new Effects();
 const audio = new SoundFX();
 const ui = new UI();
+const inventory = new Inventory();
+const missions = new Missions();
 
 /** Everything about the current game session. */
 const game = {
   state: 'menu', // 'menu' | 'countdown' | 'playing' | 'gameover'
+  mode: MODES.blitz,
+  best: loadBests(), // { blitz: 0, hothand: 0 }
+
+  // Per-game stats (reset in startGame)
   score: 0,
   streak: 0,
   bestStreak: 0,
   makes: 0,
   shots: 0,
   swishes: 0,
-  best: loadNumber(CONFIG.storageKeys.best, 0),
-  timeLeft: G.duration,
+  fireCount: 0,
+  bankShots: 0,
+  bigMultiplierMakes: 0,
+  itemsUsed: 0,
+
+  timeLeft: 0,
   countdown: 0,
   countdownShown: null,
   shotOutcome: null, // null while the ball is still "live", then 'make' | 'miss'
   resetTimer: 0,
+  basketMultiplier: null, // Hot Hand bonus on the current basket, e.g. { value: 3, color }
+  shot: null, // power-ups used by the ball in the air (from inventory.startShot())
 };
 
 const physicsEvents = [];
 let physicsTime = 0; // leftover time not yet simulated
+
+function loadBests() {
+  const bests = {};
+  for (const id of Object.keys(MODES)) bests[id] = loadNumber(KEYS.best + id, 0);
+  // Keep the best score from before modes existed
+  bests.blitz = Math.max(bests.blitz, loadNumber(KEYS.oldBest, 0));
+  return bests;
+}
 
 // ---------------------------------------------------------------------------
 // Screen size & Retina
@@ -97,9 +122,16 @@ resize();
 
 // ---------------------------------------------------------------------------
 // Stop the page from scrolling, zooming or pull-to-refresh on iPhone
+// (menus marked with class="scroll" are still allowed to scroll)
 // ---------------------------------------------------------------------------
 
-document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+document.addEventListener(
+  'touchmove',
+  (e) => {
+    if (!e.target.closest?.('.scroll')) e.preventDefault();
+  },
+  { passive: false },
+);
 document.addEventListener('gesturestart', (e) => e.preventDefault()); // iOS pinch-zoom
 document.addEventListener('dblclick', (e) => e.preventDefault());
 document.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -113,18 +145,26 @@ window.addEventListener('pointerdown', () => audio.unlock());
 
 new SwipeInput(canvas, {
   // Swipes may start anywhere in the lower half, once the ball is ready.
-  canStart: (x, y) =>
-    game.state === 'playing' && game.timeLeft > 0 && ball.state === 'ready' && y > view.height * 0.5,
+  canStart: (x, y) => game.state === 'playing' && !timeIsUp() && ball.state === 'ready' && y > view.height * 0.5,
   onShoot: shoot,
 });
 
-ui.onPlay(startGame);
+ui.onModeSelect(startGame);
+ui.onPlayAgain(() => startGame(game.mode.id));
+ui.onMenu(showMenu);
+ui.onItem(useItem);
 ui.onMute(() => ui.setMuted(audio.toggleMute()));
 ui.setMuted(audio.muted);
 
 /** Launch the ball based on the player's swipe. */
 function shoot(swipe) {
   if (game.state !== 'playing' || ball.state !== 'ready') return;
+
+  // Lock in the power-ups (and basket multiplier) for this shot
+  game.shot = inventory.startShot();
+  game.shot.basket = game.basketMultiplier;
+  game.itemsUsed += game.shot.itemsUsed;
+
   ball.launch(aimShot(swipe, ball, hoop));
   physicsTime = 0;
   game.shots++;
@@ -132,13 +172,42 @@ function shoot(swipe) {
   audio.whoosh();
 }
 
+/** The player tapped a power-up in the in-game tray. */
+function useItem(id) {
+  if (game.state !== 'playing' && game.state !== 'countdown') return;
+  const item = ITEMS[id];
+
+  if (item.type === 'ball') {
+    if (ball.state !== 'ready') return; // can't swap balls mid-flight
+    inventory.toggleBall(id);
+    ball.skin = inventory.selectedBall;
+    if (ball.skin) audio.select();
+  } else if (inventory.activateDrink(id)) {
+    game.itemsUsed++;
+    audio.powerUp();
+    effects.floatText(view.width / 2, view.height * 0.55, item.name.toUpperCase(), { color: '#7ee8ff', size: 26 });
+    effects.floatText(view.width / 2, view.height * 0.55 + 30, item.desc, { color: '#ffffff', size: 15, life: 1.4 });
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Game flow
 // ---------------------------------------------------------------------------
 
-function startGame() {
+function showMenu() {
+  game.state = 'menu';
+  newBall();
+  ui.showMenu({
+    bests: game.best,
+    missions: missions.list.map((m) => ({ ...m, text: missions.describe(m) })),
+    inventory,
+  });
+}
+
+function startGame(modeId) {
   audio.unlock();
   Object.assign(game, {
+    mode: MODES[modeId],
     state: 'countdown',
     score: 0,
     streak: 0,
@@ -146,30 +215,87 @@ function startGame() {
     makes: 0,
     shots: 0,
     swishes: 0,
-    timeLeft: G.duration,
+    fireCount: 0,
+    bankShots: 0,
+    bigMultiplierMakes: 0,
+    itemsUsed: 0,
+    timeLeft: MODES[modeId].duration,
     countdown: G.countdownFrom,
     countdownShown: null,
     shotOutcome: null,
   });
-  ball.reset();
   hoop.reset();
   effects.reset();
+  newBall();
   ui.showGame();
 }
 
 function endGame() {
+  const mode = game.mode;
   game.state = 'gameover';
-  const isNewBest = game.score > game.best;
+  inventory.selectedBall = null; // unused balls go back in the locker
+
+  const isNewBest = game.score > game.best[mode.id];
   if (isNewBest) {
-    game.best = game.score;
-    saveNumber(CONFIG.storageKeys.best, game.best);
+    game.best[mode.id] = game.score;
+    saveNumber(KEYS.best + mode.id, game.score);
     setTimeout(() => audio.newBest(), 500);
   }
-  ui.showGameOver({ ...game, isNewBest });
+
+  // Missions: record this game and pay out rewards for anything completed.
+  const results = missions.applyGame(gameStats());
+  const completed = results.filter((r) => r.completed);
+  for (const r of completed) {
+    for (const id of r.mission.reward) inventory.add(id);
+  }
+  if (completed.length) setTimeout(() => audio.missionComplete(), 1100);
+
+  ui.showGameOver({
+    ...game,
+    title: mode.timed ? 'TIME’S UP' : `${mode.name.toUpperCase()} · MISSED`,
+    best: game.best[mode.id],
+    isNewBest,
+    results,
+  });
+  newBall();
+}
+
+/** The numbers missions care about, for the game that just ended. */
+function gameStats() {
+  return {
+    points: game.score,
+    makes: game.makes,
+    swishes: game.swishes,
+    bestStreak: game.bestStreak,
+    fireCount: game.fireCount,
+    bankShots: game.bankShots,
+    bigMultiplierMakes: game.bigMultiplierMakes,
+    itemsUsed: game.itemsUsed,
+    hotHandMakes: game.mode.id === 'hothand' ? game.makes : 0,
+    blitzPoints: game.mode.id === 'blitz' ? game.score : 0,
+    games: 1,
+  };
 }
 
 function isOnFire() {
   return game.state === 'playing' && game.streak >= G.fireStreak;
+}
+
+function timeIsUp() {
+  return game.mode.timed && game.timeLeft <= 0;
+}
+
+/** Bring out a fresh ball (random spot in a game, centered in menus). */
+function newBall() {
+  const inGame = game.state === 'playing' || game.state === 'countdown';
+  const range = CONFIG.ball.startXRange;
+  ball.reset(inGame ? (Math.random() * 2 - 1) * range : CONFIG.ball.startX);
+  ball.skin = inGame ? inventory.selectedBall : null;
+  game.shot = null;
+
+  // Hot Hand: maybe put a multiplier on the next basket
+  game.basketMultiplier = inGame && game.mode.basketMultipliers ? rollBasketMultiplier() : null;
+  if (game.basketMultiplier?.value >= 5) audio.rareMultiplier();
 }
 
 function updateCountdown(dt) {
@@ -191,7 +317,7 @@ function updateCountdown(dt) {
 }
 
 function updateTimer(dt) {
-  if (game.state !== 'playing' || game.timeLeft <= 0) return;
+  if (game.state !== 'playing' || !game.mode.timed || game.timeLeft <= 0) return;
   const before = game.timeLeft;
   game.timeLeft = Math.max(0, game.timeLeft - dt);
 
@@ -205,6 +331,31 @@ function updateTimer(dt) {
     // game when it lands instead — see finishShot().
     if (ball.state !== 'flying') endGame();
   }
+}
+
+// ---------------------------------------------------------------------------
+// The hoop: movement and size
+// ---------------------------------------------------------------------------
+
+/**
+ * Is a power-up effect on right now? While a ball is in the air we use the
+ * power-ups it was shot with, so a boost can't run out mid-flight.
+ */
+function boostOn(effect) {
+  if (game.state !== 'playing' && game.state !== 'countdown') return false;
+  if (game.shot) return game.shot[effect];
+  return effect === 'bigHoop' ? inventory.isActive('white') : inventory.isActive('orange');
+}
+
+/** How fast the hoop should slide, based on the mode's rules. */
+function hoopSpeed() {
+  if (game.state !== 'playing') return 0;
+  const rule = game.mode.movingHoop;
+  const value = game[rule.stat];
+  if (value < rule.startAt) return 0;
+  let speed = Math.min(G.hoopSpeedMax, rule.speedStart + (value - rule.startAt) * rule.speedPer);
+  if (boostOn('slowHoop')) speed *= DRINK_EFFECTS.slowHoopFactor;
+  return speed;
 }
 
 // ---------------------------------------------------------------------------
@@ -248,23 +399,50 @@ function updateShot(dt) {
 }
 
 function onMake(swish) {
+  const shot = game.shot ?? { ballMultiplier: 1, greenMultiplier: 1, basket: null, ball: null };
+  const rule = game.mode.movingHoop;
+  const hoopStatBefore = game[rule.stat];
+
   game.shotOutcome = 'make';
   game.resetTimer = G.resetAfterMake;
   game.makes++;
   game.streak++;
   game.bestStreak = Math.max(game.bestStreak, game.streak);
+  if (ball.touchedBoard) game.bankShots++;
+  if (game.streak === G.fireStreak) game.fireCount++;
+  const onFireNow = game.streak >= G.fireStreak;
 
-  // Points: base + swish bonus, doubled (or more) while on fire
-  let points = G.pointsPerMake + (swish ? G.swishBonus : 0);
-  if (game.streak >= G.fireStreak) points *= G.fireMultiplier;
-  const scoreBefore = game.score;
+  // Points: base (+ swish bonus), then every multiplier stacks.
+  // `labels` explains the bonus to the player under the "+points" text.
+  const labels = [];
+  let multiplier = 1;
+  if (onFireNow) multiplier *= G.fireMultiplier;
+  if (shot.basket) {
+    multiplier *= shot.basket.value;
+    labels.push({ text: `${shot.basket.value}× BASKET`, color: shot.basket.color });
+    if (shot.basket.value >= 3) game.bigMultiplierMakes++;
+  }
+  if (shot.ball) {
+    multiplier *= shot.ballMultiplier;
+    labels.push({ text: `${ITEMS[shot.ball].name.toUpperCase()} ${shot.ballMultiplier}×`, color: '#ffd23f' });
+  }
+  if (shot.greenMultiplier > 1) {
+    multiplier *= shot.greenMultiplier;
+    labels.push({ text: `GREEN ${shot.greenMultiplier.toFixed(1)}×`, color: '#5ee05a' });
+  }
+  const points = Math.round((G.pointsPerMake + (swish ? G.swishBonus : 0)) * multiplier);
   game.score += points;
 
   // Feedback
   const rim = project(hoop.x, hoop.rimY, hoop.z);
-  const onFireNow = game.streak >= G.fireStreak;
-  effects.floatText(rim.x, rim.y - 40, `+${points}`, { color: onFireNow ? '#ffd23f' : '#ffffff', size: 40 });
-  effects.burst(rim.x, rim.y + 20, onFireNow ? ['#ffd23f', '#ff7a1a', '#ff3d1a'] : ['#ffffff', '#ff7a1a', '#7aa2ff'], 18);
+  const big = multiplier >= 3;
+  effects.floatText(rim.x, rim.y - 40, `+${points}`, { color: onFireNow || big ? '#ffd23f' : '#ffffff', size: big ? 52 : 40 });
+  labels.forEach((label, i) => {
+    effects.floatText(rim.x, rim.y + 30 + i * 24, label.text, { color: label.color, size: 18, life: 1.3 });
+  });
+  const colors = shot.basket ? [shot.basket.color, '#ffffff', '#ffd23f'] : onFireNow ? ['#ffd23f', '#ff7a1a', '#ff3d1a'] : ['#ffffff', '#ff7a1a', '#7aa2ff'];
+  effects.burst(rim.x, rim.y + 20, colors, big ? 36 : 18);
+  if (big) effects.shake(6);
   hoop.onScore(swish ? 1.3 : 1);
   audio.score(game.streak);
 
@@ -278,7 +456,7 @@ function onMake(swish) {
     effects.shake(8);
     effects.floatText(view.width / 2, view.height * 0.5, 'ON FIRE!', { color: '#ff8a1f', size: 54, life: 1.4 });
   }
-  if (scoreBefore < G.movingHoopScore && game.score >= G.movingHoopScore) {
+  if (hoopStatBefore < rule.startAt && game[rule.stat] >= rule.startAt) {
     effects.floatText(view.width / 2, view.height * 0.58, 'HOOP ON THE MOVE!', { color: '#7aa2ff', size: 26, life: 1.6 });
   }
 }
@@ -286,17 +464,24 @@ function onMake(swish) {
 function onMiss() {
   game.shotOutcome = 'miss';
   game.resetTimer = G.resetAfterMiss;
-  if (game.streak >= G.fireStreak) {
+  if (game.mode.endsOnMiss) {
+    game.resetTimer += 0.4; // a beat longer so the miss sinks in
+    effects.floatText(view.width / 2, view.height * 0.5, 'MISS', { color: '#ff5a5a', size: 54, life: 1.2 });
+  } else if (game.streak >= G.fireStreak) {
     effects.floatText(view.width / 2, view.height * 0.5, 'FIRE’S OUT', { color: '#9aa7c7', size: 30 });
   }
   game.streak = 0;
 }
 
-/** The shot is done: bring out a fresh ball (or end the game if time ran out). */
+/** The shot is done: bring out a fresh ball, or end the game. */
 function finishShot() {
-  ball.reset();
+  const outcome = game.shotOutcome;
   game.shotOutcome = null;
-  if (game.state === 'playing' && game.timeLeft <= 0) endGame();
+  if (game.state === 'playing') {
+    if (game.mode.endsOnMiss && outcome === 'miss') return endGame();
+    if (timeIsUp()) return endGame();
+  }
+  newBall();
 }
 
 // ---------------------------------------------------------------------------
@@ -306,7 +491,7 @@ function finishShot() {
 function update(dt) {
   updateCountdown(dt);
   updateTimer(dt);
-  hoop.update(dt, game.score, game.state === 'playing');
+  hoop.update(dt, hoopSpeed(), boostOn('bigHoop') ? DRINK_EFFECTS.bigHoopScale : 1);
   ball.update(dt);
   updateShot(dt);
 
@@ -317,8 +502,17 @@ function update(dt) {
   }
   effects.update(dt);
 
-  if (game.state === 'playing') {
-    ui.updateHUD({ score: game.score, timeLeft: game.timeLeft, streak: game.streak, best: game.best, onFire: isOnFire() });
+  if (game.state === 'playing' || game.state === 'countdown') {
+    const seconds = Math.ceil(game.timeLeft);
+    ui.updateHUD({
+      score: game.score,
+      best: game.best[game.mode.id],
+      center: game.mode.timed ? seconds : `RUN ${game.makes}`,
+      lowTime: game.mode.timed && seconds <= 10,
+      streak: game.streak,
+      onFire: isOnFire(),
+    });
+    ui.renderTrays(inventory, ball.state !== 'ready');
   }
   ui.setHint(game.state === 'playing' && game.shots === 0 && ball.state === 'ready');
 }
@@ -348,6 +542,11 @@ function render(time) {
 
   ctx.drawImage(courtCanvas, 0, 0, width, height);
   ball.drawShadow(ctx);
+
+  // Hot Hand multiplier badge floats above the backboard
+  if (game.basketMultiplier && game.state === 'playing') {
+    hoop.drawBadge(ctx, `${game.basketMultiplier.value}×`, game.basketMultiplier.color, time);
+  }
 
   const onFire = isOnFire();
   const drawBall = () => {
@@ -387,8 +586,8 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
-ui.showStart(game.best);
+showMenu();
 requestAnimationFrame(frame);
 
-// Handy for debugging in the browser console: window.ballin.game.score = 9
-window.ballin = { game, ball, hoop, CONFIG };
+// Handy for debugging in the browser console, e.g. ballin.inventory.add('gold', 5)
+window.ballin = { game, ball, hoop, inventory, missions, CONFIG };

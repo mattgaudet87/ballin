@@ -31,6 +31,7 @@ export class Hoop {
     this.z = H.z;
     this.rimY = H.rimY;
     this.radius = H.rimRadius;
+    this.rimScale = 1; // grows while a White Monster is active
     this.tube = H.rimTube;
     this.netLength = H.netLength;
 
@@ -53,6 +54,7 @@ export class Hoop {
 
   /** Reset position and animations (called at the start of every game). */
   reset() {
+    this.x = 0;
     this.phase = 0;
     this.speed = 0;
     this.netStretch = 0;
@@ -60,19 +62,30 @@ export class Hoop {
     this.wobble = 0;
   }
 
-  update(dt, score, isPlaying) {
+  /**
+   * @param speed      how fast to slide side to side (0 = stay put).
+   *                   main.js works this out from the mode's rules.
+   * @param rimScale   target rim size (1 = normal, bigger with a White Monster)
+   */
+  update(dt, speed, rimScale = 1) {
     this.time += dt;
-    const G = CONFIG.game;
+    this.speed = speed;
 
-    if (isPlaying && score >= G.movingHoopScore) {
-      // Slide side to side, faster as the score climbs.
-      this.speed = Math.min(G.hoopSpeedMax, G.hoopSpeedStart + (score - G.movingHoopScore) * G.hoopSpeedPerPoint);
-      this.phase += this.speed * dt;
-      this.x = Math.sin(this.phase) * G.hoopRange;
+    if (speed > 0) {
+      this.phase += speed * dt;
+      this.x = Math.sin(this.phase) * CONFIG.game.hoopRange;
     } else {
       // Glide back to the middle.
+      this.phase = 0;
       this.x += (0 - this.x) * Math.min(1, dt * 3);
     }
+
+    // Smoothly grow/shrink the rim. It grows toward the player so the back of
+    // the rim stays the same distance from the backboard.
+    this.rimScale += (rimScale - this.rimScale) * Math.min(1, dt * 6);
+    const H = CONFIG.hoop;
+    this.radius = H.rimRadius * this.rimScale;
+    this.z = H.z - (this.radius - H.rimRadius);
 
     // Spring the net back to its resting length.
     const stiffness = 140;
@@ -80,6 +93,33 @@ export class Hoop {
     this.netVelocity += (-stiffness * this.netStretch - damping * this.netVelocity) * dt;
     this.netStretch += this.netVelocity * dt;
     this.wobble = Math.max(0, this.wobble - dt * 1.5);
+  }
+
+  /**
+   * Draw a glowing multiplier badge (like "3×") above the backboard.
+   */
+  drawBadge(ctx, text, color, time) {
+    const p = project(this.x, this.boardTop + 0.18, this.boardZ);
+    if (!p) return;
+    const size = Math.max(18, 0.3 * p.scale);
+    const pulse = 1 + Math.sin(time * 5) * 0.06;
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.scale(pulse, pulse);
+    ctx.font = `900 ${Math.round(size)}px -apple-system, "SF Pro Display", "Helvetica Neue", Arial, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const w = ctx.measureText(text).width + size * 0.9;
+    const h = size * 1.35;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = size * 0.8;
+    ctx.fillStyle = color;
+    roundRect(ctx, -w / 2, -h / 2, w, h, h / 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(text, 0, size * 0.04);
+    ctx.restore();
   }
 
   /** Called on a made basket: stretch the net. */

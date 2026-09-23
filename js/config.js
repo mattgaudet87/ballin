@@ -17,8 +17,11 @@ export const CONFIG = {
 
   ball: {
     radius: 0.12,
-    // Where the ball rests before each shot
+    // Where the ball rests before each shot. During a game its x is picked
+    // at random between -startXRange and +startXRange, so every shot needs
+    // fresh aiming.
     startX: 0,
+    startXRange: 0.35,
     startY: 2.2,
     startZ: 0,
     backspin: -11, // radians per second (negative = backspin, like a real jumper)
@@ -41,13 +44,14 @@ export const CONFIG = {
   },
 
   camera: {
-    // The camera sits behind and above the ball, looking at the hoop.
-    y: 4.4,
-    z: -3.2,
+    // A low camera just above rim height, behind the ball, looking almost
+    // straight at the hoop (like GamePigeon's flick basketball).
+    y: 3.5,
+    z: -2.5,
     // The camera zoom is calculated automatically so that the resting ball
     // and the rim land on these spots (fractions of the screen height).
-    ballScreenY: 0.83,
-    rimScreenY: 0.32,
+    ballScreenY: 0.82,
+    rimScreenY: 0.37,
   },
 
   physics: {
@@ -64,32 +68,32 @@ export const CONFIG = {
     // How fast (in screen-heights per second) the end of your swipe must be
     // moving for a "perfect power" shot.
     perfectSwipeSpeed: 2.3,
-    // 1 = your swipe speed is used exactly, lower = more forgiving.
-    powerForgiveness: 0.38,
-    minPower: 0.55,
-    maxPower: 1.5,
+    // How much swipe speed matters: 1 = fully, lower = barely.
+    // Kept low on purpose so the game is about AIM, not strength.
+    powerForgiveness: 0.2,
+    // Power is always clamped to this narrow range (1 = perfect distance),
+    // so even a wild flick never sails way over the hoop.
+    minPower: 0.82,
+    maxPower: 1.18,
     // Aim assist gently pulls near-misses toward the hoop.
-    aimAssist: 0.6, // 0 = none, 1 = always straight at the hoop
-    aimAssistRange: 0.75, // meters: misses further than this get no help
-    apexY: 4.2, // how high the ball peaks on a perfect shot
-    apexPowerGain: 0.6, // harder shots also fly a bit higher
+    aimAssist: 0.35, // 0 = none, 1 = always straight at the hoop
+    aimAssistRange: 0.6, // meters: misses further than this get no help
+    apexY: 4.0, // how high the ball peaks on a perfect shot
+    apexPowerGain: 0.2, // harder shots fly only a tiny bit higher
     minSwipePx: 25, // shorter swipes are ignored
     autoReleaseFraction: 0.35, // dragging this far up the screen shoots automatically
     speedWindowMs: 90, // swipe speed is measured over the last N milliseconds
   },
 
+  // Rules shared by every mode. Mode-specific rules live in modes.js.
   game: {
-    duration: 60, // seconds per game
     countdownFrom: 3,
     pointsPerMake: 1,
     swishBonus: 1, // extra points for touching nothing but net
     fireStreak: 3, // makes in a row needed to catch fire
     fireMultiplier: 2, // points are multiplied by this while on fire
-    movingHoopScore: 10, // the hoop starts sliding once you reach this score
     hoopRange: 0.62, // how far (meters) the hoop slides left/right
-    hoopSpeedStart: 0.7, // slide speed (radians/second) when it starts moving
-    hoopSpeedPerPoint: 0.05, // ...gets this much faster per extra point
-    hoopSpeedMax: 2.4,
+    hoopSpeedMax: 2.4, // fastest slide speed (radians/second)
     resetAfterMake: 0.75, // seconds before the next ball appears
     resetAfterMiss: 0.5,
     maxShotTime: 4.5, // give up on a shot after this many seconds
@@ -98,7 +102,10 @@ export const CONFIG = {
   maxPixelRatio: 3, // cap for Retina rendering (higher = sharper but slower)
 
   storageKeys: {
-    best: 'ballin.bestScore',
+    best: 'ballin.best.', // + mode id, e.g. 'ballin.best.blitz'
+    oldBest: 'ballin.bestScore', // from before modes existed
     muted: 'ballin.muted',
+    inventory: 'ballin.inventory',
+    missions: 'ballin.missions',
   },
 };

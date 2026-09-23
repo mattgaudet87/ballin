@@ -41,6 +41,10 @@
       </div>
     </div>
 
+    <!-- In-game power-up trays: specialty balls (left), energy drinks (right) -->
+    <div id="ball-tray" class="tray tray-left hidden"></div>
+    <div id="drink-tray" class="tray tray-right hidden"></div>
+
     <button id="mute-btn" type="button" aria-label="Mute sound">
       <!-- Speaker icon; the waves hide and the slash shows when muted -->
       <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
@@ -57,26 +61,41 @@
 
     <div id="countdown" class="hidden"></div>
 
-    <!-- Start screen -->
-    <section id="start-screen" class="overlay">
+    <!-- Start screen: pick a mode, check missions and power-ups -->
+    <section id="start-screen" class="overlay scroll">
       <div class="panel">
         <h1 class="title">BALLIN'</h1>
-        <p class="tagline">Flick to shoot. 60 seconds on the clock.</p>
-        <div class="best-pill">BEST <strong id="start-best">0</strong></div>
-        <button id="play-btn" class="big-btn" type="button">PLAY</button>
-        <ul class="tips">
-          <li><b>Swipe up</b> on the ball — faster flick, longer shot</li>
-          <li><b>Swish</b> it for a bonus point</li>
-          <li><b>3 in a row</b> sets you on fire — double points</li>
-          <li>Hit <b>10 points</b> and the hoop starts moving</li>
-        </ul>
+        <p class="tagline">Flick to shoot. Aim is everything.</p>
+
+        <div class="modes">
+          <button class="mode-card" data-mode="blitz" type="button">
+            <span class="mode-icon">⏱</span>
+            <span class="mode-name">BLITZ</span>
+            <span class="mode-desc">60 seconds. Score all you can.</span>
+            <span class="mode-best">BEST <b data-best="blitz">0</b></span>
+          </button>
+          <button class="mode-card hot" data-mode="hothand" type="button">
+            <span class="mode-icon">🔥</span>
+            <span class="mode-name">HOT HAND</span>
+            <span class="mode-desc">No clock. One miss ends it. Multipliers up to 10×.</span>
+            <span class="mode-best">BEST <b data-best="hothand">0</b></span>
+          </button>
+        </div>
+
+        <h2 class="section-title">Missions</h2>
+        <div id="start-missions" class="missions"></div>
+
+        <h2 class="section-title">Locker</h2>
+        <div id="locker" class="locker"></div>
+
+        <p class="how">Swipe up on the ball to shoot · Swish = bonus point · 3 in a row = on fire (2×) · Tap power-ups on the sides during a game</p>
       </div>
     </section>
 
     <!-- Game over screen -->
-    <section id="gameover-screen" class="overlay hidden">
+    <section id="gameover-screen" class="overlay scroll hidden">
       <div class="panel">
-        <p class="eyebrow">TIME'S UP</p>
+        <p id="gameover-title" class="eyebrow">TIME'S UP</p>
         <div id="final-score" class="final-score">0</div>
         <div id="new-best" class="new-best hidden">NEW BEST!</div>
         <div class="best-pill">BEST <strong id="stat-best">0</strong></div>
@@ -86,7 +105,14 @@
           <div><span id="stat-swishes">0</span><small>Swishes</small></div>
           <div><span id="stat-streak">0</span><small>Best streak</small></div>
         </div>
-        <button id="again-btn" class="big-btn" type="button">PLAY AGAIN</button>
+
+        <h2 class="section-title">Missions</h2>
+        <div id="gameover-missions" class="missions"></div>
+
+        <div class="btn-row">
+          <button id="menu-btn" class="ghost-btn" type="button">MENU</button>
+          <button id="again-btn" class="big-btn" type="button">PLAY AGAIN</button>
+        </div>
       </div>
     </section>
   </main>

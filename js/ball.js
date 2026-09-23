@@ -52,6 +52,15 @@ function curvedSeam(side, samples = 56) {
 const SEAMS = [greatCircle('x'), greatCircle('y'), curvedSeam(1), curvedSeam(-1)];
 const VIEW_YAW = 0.4; // turn the ball a little so the seams look 3D
 
+/** Colors for the normal ball and the specialty balls: [highlight, middle, edge]. */
+const SKINS = {
+  normal: ['#ffae63', '#f2711c', '#a8420b'],
+  fire: ['#ffd07a', '#ff7a1a', '#a8420b'],
+  gold: ['#fff4b0', '#ffc928', '#9a6a00'],
+  silver: ['#ffffff', '#c9d2de', '#5d6878'],
+  bronze: ['#ffd2a8', '#c97a3d', '#6b3814'],
+};
+
 /** Ease-out with a small overshoot, used for the "pop in" animation. */
 function easeOutBack(t) {
   const c = 1.7;
@@ -64,10 +73,13 @@ export class Ball {
     this.reset();
   }
 
-  /** Put the ball back at the bottom, ready for the next shot. */
-  reset() {
+  /**
+   * Put the ball back at the bottom, ready for the next shot.
+   * `x` lets main.js place it somewhere other than the center.
+   */
+  reset(x = CONFIG.ball.startX) {
     const B = CONFIG.ball;
-    this.x = B.startX;
+    this.x = x;
     this.y = B.startY;
     this.z = B.startZ;
     this.vx = 0;
@@ -78,6 +90,7 @@ export class Ball {
     this.spinSpeed = 0;
     this.spawn = 0; // 0 → 1 "pop in" animation progress
     this.flightTime = 0;
+    this.skin = null; // 'gold' | 'silver' | 'bronze' | null (set by main.js)
 
     // Per-shot flags used for scoring
     this.touchedRim = false;
@@ -138,17 +151,21 @@ export class Ball {
     ctx.save();
     ctx.translate(s.x, s.y);
 
-    // Glow when on fire
-    if (onFire) {
+    // Glow when on fire, or shimmer when it's a specialty ball
+    if (this.skin) {
+      ctx.shadowColor = SKINS[this.skin][1];
+      ctx.shadowBlur = r * (0.6 + Math.sin(time * 6) * 0.2);
+    } else if (onFire) {
       ctx.shadowColor = 'rgba(255, 120, 20, 0.95)';
       ctx.shadowBlur = r * 0.9;
     }
 
     // Base orange ball with a light-to-dark gradient for a round look
     const base = ctx.createRadialGradient(-r * 0.35, -r * 0.4, r * 0.1, 0, 0, r);
-    base.addColorStop(0, onFire ? '#ffd07a' : '#ffae63');
-    base.addColorStop(0.55, onFire ? '#ff7a1a' : '#f2711c');
-    base.addColorStop(1, '#a8420b');
+    const [light, mid, edge] = SKINS[this.skin ?? (onFire ? 'fire' : 'normal')];
+    base.addColorStop(0, light);
+    base.addColorStop(0.55, mid);
+    base.addColorStop(1, edge);
     ctx.fillStyle = base;
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, TAU);

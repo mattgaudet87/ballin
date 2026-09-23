@@ -179,6 +179,38 @@ export class SoundFX {
     this.tone({ freq: 196, type: 'square', duration: 0.8, volume: 0.08, attack: 0.02 });
   }
 
+  /** Can crack + fizz when an energy drink is opened. */
+  powerUp() {
+    if (!this.ready('powerUp')) return;
+    this.noise({ filter: 'highpass', freq: 2500, duration: 0.05, volume: 0.3 });
+    this.noise({ filter: 'bandpass', freq: 6000, freqEnd: 3000, q: 0.7, duration: 0.5, volume: 0.15, attack: 0.03, delay: 0.04 });
+    this.tone({ freq: 440, freqEnd: 1320, type: 'triangle', duration: 0.3, volume: 0.12, delay: 0.05 });
+  }
+
+  /** Short click when a specialty ball is loaded. */
+  select() {
+    if (!this.ready('select')) return;
+    this.tone({ freq: 880, type: 'triangle', duration: 0.08, volume: 0.15 });
+    this.tone({ freq: 1320, type: 'triangle', duration: 0.12, volume: 0.12, delay: 0.05 });
+  }
+
+  /** Shimmer when a rare multiplier (5× or 10×) appears on the hoop. */
+  rareMultiplier() {
+    if (!this.ready('rare')) return;
+    [1046, 1318, 1568, 2093].forEach((freq, i) => {
+      this.tone({ freq, type: 'sine', duration: 0.3, volume: 0.1, delay: i * 0.05 });
+    });
+  }
+
+  /** Reward jingle for a completed mission. */
+  missionComplete() {
+    if (!this.ready('mission')) return;
+    [784, 988, 1175, 1568].forEach((freq, i) => {
+      this.tone({ freq, type: 'square', duration: 0.18, volume: 0.07, delay: i * 0.08 });
+      this.tone({ freq: freq / 2, type: 'triangle', duration: 0.2, volume: 0.1, delay: i * 0.08 });
+    });
+  }
+
   /** Little fanfare for a new best score. */
   newBest() {
     if (!this.ready('newBest')) return;
