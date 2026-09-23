@@ -260,10 +260,7 @@ ui.onFriendPage({
 ui.onCollect(collectReward);
 ui.onItem(useItem);
 ui.onMute(() => ui.setMuted(audio.toggleMute()));
-// Free Throw has no clock and no way to lose, so END finishes the session
-ui.onEnd(() => {
-  if (inGame() && game.mode.endless) endGame();
-});
+ui.onLeave(leaveGame);
 ui.setMuted(audio.muted);
 
 /** Launch the ball based on the player's swipe, then reload right away. */
@@ -621,6 +618,45 @@ function beginPlay() {
   ui.hideTapToStart();
   audio.unlock();
   audio.start();
+}
+
+/**
+ * The LEAVE button: quit the game and go back to where it was started from.
+ * The game doesn't count (no game over screen, no best score, no missions),
+ * but baskets you made still add to your lifetime count.
+ */
+function leaveGame() {
+  if (!inGame()) return;
+  const mode = game.mode;
+
+  // Free Throw has no clock and no way to lose, so END just finishes the session
+  if (mode.endless) return endGame();
+
+  // Answering a friend's challenge: your score so far is sent, so nobody can
+  // quit and replay until they get a good score.
+  if (mode.online && game.challenge.id) {
+    if (confirm(`Leave now? Your score of ${game.score} will be sent to ${game.challenge.opponent}.`)) endGame();
+    return;
+  }
+
+  const what = mode.passAndPlay ? 'the match' : 'this game';
+  if (!confirm(`Leave ${what}? It won’t count.`)) return;
+
+  flying.length = 0;
+  inventory.selectedBall = null; // an unused specialty ball goes back in the locker
+  const diff = game.difficulty.id;
+  saveNumber(`${KEYS.baskets}${mode.id}.${diff}`, game.lifetime[mode.id][diff]);
+
+  if (mode.passAndPlay) {
+    game.match = null;
+    showFriendsSetup('local');
+  } else if (mode.online) {
+    showOnline(); // a new challenge that was never sent
+  } else if (mode.missions) {
+    showHotHandHub();
+  } else {
+    showHome();
+  }
 }
 
 /** True during a game, including the "Tap to start" moment before it begins. */
@@ -991,7 +1027,7 @@ function hudInfo() {
     lowTime: mode.timed && seconds <= 10,
     streak: game.streak,
     onFire: isOnFire(),
-    endButton: !!mode.endless,
+    leaveLabel: mode.endless ? 'END' : '✕ LEAVE',
   };
   if (mode.passAndPlay) {
     info.label = currentPlayer().name.toUpperCase();

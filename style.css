@@ -187,8 +187,8 @@ body {
   color: var(--muted);
 }
 
-/* END button (Free Throw), just under the mute button */
-#end-btn {
+/* LEAVE / END button, just under the mute button */
+#leave-btn {
   position: absolute;
   top: calc(var(--safe-top) + 66px);
   right: 14px;

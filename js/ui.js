@@ -70,7 +70,7 @@ export class UI {
       ballTray: $('ball-tray'),
       drinkTray: $('drink-tray'),
       muteBtn: $('mute-btn'),
-      endBtn: $('end-btn'),
+      leaveBtn: $('leave-btn'),
       tapStart: $('tap-start'),
       tapStartMode: $('tap-start-mode'),
       lockerTitle: $('locker-title'),
@@ -230,9 +230,9 @@ export class UI {
     this.el.muteBtn.addEventListener('click', callback);
   }
 
-  /** The END button (Free Throw, which has no clock and no way to lose). */
-  onEnd(callback) {
-    this.el.endBtn.addEventListener('click', callback);
+  /** The LEAVE button in the corner during a game (END in Free Throw). */
+  onLeave(callback) {
+    this.el.leaveBtn.addEventListener('click', callback);
   }
 
   /** callback(itemId) when a power-up in the in-game tray is tapped. */
@@ -490,7 +490,7 @@ export class UI {
     hide(this.el.hint);
     hide(this.el.ballTray);
     hide(this.el.drinkTray);
-    hide(this.el.endBtn);
+    hide(this.el.leaveBtn);
     this.shown = {};
   }
 
@@ -499,9 +499,9 @@ export class UI {
    * @param label   small text above the score ("SCORE" or a player's name)
    * @param sub     line under the score ("BEST 12" or "ROUND 1 OF 2")
    * @param center  what shows in the middle pill (seconds left, or the run count)
-   * @param endButton  show the END button (modes you can't lose)
+   * @param leaveLabel text on the corner button ("✕ LEAVE", or "END" in Free Throw)
    */
-  updateHUD({ label, score, sub, lifetime, center, lowTime, streak, onFire, endButton }) {
+  updateHUD({ label, score, sub, lifetime, center, lowTime, streak, onFire, leaveLabel }) {
     this.setText('hudLabel', label);
     this.setText('score', score);
     this.setText('bestSmall', sub);
@@ -514,9 +514,10 @@ export class UI {
     this.el.streak.classList.toggle('hidden', !streakText);
     this.el.streak.classList.toggle('fire', onFire);
 
-    if (this.shown.endButton !== endButton) {
-      this.shown.endButton = endButton;
-      this.el.endBtn.classList.toggle('hidden', !endButton);
+    if (this.shown.leaveLabel !== leaveLabel) {
+      this.shown.leaveLabel = leaveLabel;
+      this.el.leaveBtn.textContent = leaveLabel;
+      this.el.leaveBtn.classList.remove('hidden');
     }
   }
 

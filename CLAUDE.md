@@ -106,8 +106,8 @@ js/
   - **Free Throw** (`streakScoring`, `fixedSpot`, `endless`, `fire: false`, `movingHoop: null`):
     no clock, no losing, no multipliers or fire. The ball is always centered. `game.score` is
     the current streak (reset on a miss) and the saved best is the longest streak
-    (`gameResult()` = `bestStreak`; `saveBest()` runs on every make). An END button (`#end-btn`)
-    finishes the session.
+    (`gameResult()` = `bestStreak`; `saveBest()` runs on every make). The corner button (`#leave-btn`)
+    says END here and finishes the session with results.
   - **Online** (`online`): a 60-second Blitz played for a challenge (`game.challenge`
     = `{ id, opponent, score }`; `id` null = a new challenge). `endGame()` →
     `sendChallengeResult()`; a failed send turns PLAY AGAIN into RETRY.
@@ -164,6 +164,12 @@ js/
   (8) evenly spaced x positions across the difficulty's `startXRange`. It never uses the same
   spot twice in a row (`game.spot`), so every shot needs fresh aim. Free Throw (`fixedSpot`) is always centered. Power barely matters by design
   (`CONFIG.shot.powerForgiveness`, `minPower`/`maxPower`).
+- **Leave button** (`#leave-btn`, `leaveGame()` in main.js): shown in every mode during a game.
+  It asks to confirm, then quits without a result (no game over, best or mission progress;
+  lifetime baskets are kept) and goes back to where the game started: home, the Hot Hand hub,
+  friends setup (the pass-and-play match is dropped) or the Online tab. Two exceptions: Free
+  Throw's button says END and shows results (`endGame()`), and leaving while answering an
+  online challenge sends your score so far (so you can't quit and replay for a better one).
 - **Rapid fire / ball states:** `ball` (main.js, a `let`) is the ball waiting at the bottom;
   `flying` holds every ball in the air, and several can fly at once. `shoot()` moves `ball` into
   `flying` with its own `shot` snapshot, then makes a new hidden ball (`state: 'reloading'`)
