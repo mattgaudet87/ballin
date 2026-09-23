@@ -2,9 +2,9 @@
  * ui.js
  * ---------------------------------------------------------------------------
  * Everything drawn with regular HTML instead of the canvas:
- *   - menu screens: home, Hot Hand hub (missions + locker), friends setup,
- *     pass-the-phone handoff, friends results, online (login, friends,
- *     challenges), game over
+ *   - menu screens: home, Hot Hand hub (missions + locker), Blitz with
+ *     Friends (pass-and-play names, or online: login, challenges, friends),
+ *     a friend's page, pass-the-phone handoff, friends results, game over
  *   - the reward popup
  *   - the in-game HUD, "swipe up" hint and power-up trays
  *   - the mute button
@@ -24,7 +24,7 @@ const SCREENS = {
   home: 'home-screen',
   hothand: 'hothand-screen',
   friends: 'friends-screen',
-  online: 'online-screen',
+  friend: 'friend-screen',
   handoff: 'handoff-screen',
   results: 'results-screen',
   gameover: 'gameover-screen',
@@ -76,7 +76,15 @@ export class UI {
       lockerTitle: $('locker-title'),
       gameOverNote: $('gameover-note'),
       againBtn: $('again-btn'),
-      onlineStatus: $('online-status'),
+      friendsBadge: $('friends-badge'),
+      onlineTabBadge: $('online-tab-badge'),
+      localPanel: $('local-panel'),
+      onlinePanel: $('online-panel'),
+      addFriendForm: $('add-friend-form'),
+      friendAvatar: $('friend-avatar'),
+      friendName: $('friend-name'),
+      friendSub: $('friend-sub'),
+      friendBody: $('friend-body'),
       authForm: $('auth-form'),
       authError: $('auth-error'),
       accountBlock: $('account-block'),
@@ -156,19 +164,53 @@ export class UI {
     $('logout-btn').addEventListener('click', callback);
   }
 
-  /** callback(username) when the Add friend form is sent. */
+  /**
+   * "+ Add friend" opens a small form; callback(username, done) when it's sent.
+   * Call done() once the friend was added to close the form again.
+   */
   onAddFriend(callback) {
-    $('add-friend-form').addEventListener('submit', (e) => {
-      e.preventDefault();
-      const input = $('friend-username');
-      const name = input.value.trim();
-      if (name) callback(name, () => (input.value = ''));
+    const form = this.el.addFriendForm;
+    const input = $('friend-username');
+    $('add-friend-btn').addEventListener('click', () => {
+      form.classList.toggle('hidden');
+      if (!form.classList.contains('hidden')) input.focus();
     });
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const name = input.value.trim();
+      if (!name) return;
+      callback(name, () => {
+        input.value = '';
+        form.classList.add('hidden');
+      });
+    });
+  }
+
+  /** callback('local' | 'online') when a Blitz with Friends tab is tapped. */
+  onFriendsTab(callback) {
+    $$('[data-tab]').forEach((tab) => tab.addEventListener('click', () => callback(tab.dataset.tab)));
+  }
+
+  /** Show the Pass and play or Online part of the Blitz with Friends screen. */
+  setFriendsTab(tab) {
+    $$('[data-tab]').forEach((btn) => {
+      btn.classList.toggle('selected', btn.dataset.tab === tab);
+      btn.setAttribute('aria-selected', btn.dataset.tab === tab);
+    });
+    this.el.localPanel.classList.toggle('hidden', tab !== 'local');
+    this.el.onlinePanel.classList.toggle('hidden', tab !== 'online');
+  }
+
+  /** The friend page's buttons. handlers: { back(), challenge(), remove() } */
+  onFriendPage(handlers) {
+    $('friend-back-btn').addEventListener('click', handlers.back);
+    $('friend-challenge-btn').addEventListener('click', handlers.challenge);
+    $('friend-remove-btn').addEventListener('click', handlers.remove);
   }
 
   /**
    * Buttons inside the friend and challenge lists.
-   * handlers: { challenge(name), play(id), decline(id), unfriend(name) }
+   * handlers: { friend(name), challenge(name), play(id), decline(id) }
    */
   onOnlineList(handlers) {
     for (const list of [this.el.friendList, this.el.challengeList]) {
@@ -344,10 +386,13 @@ export class UI {
 
   // --- Online ------------------------------------------------------------------------
 
-  /** The small chip on the home screen's Online card. */
-  setOnlineStatus(username, yourTurnCount = 0) {
-    const text = !username ? 'LOG IN' : yourTurnCount ? `${yourTurnCount} YOUR TURN` : username.toUpperCase();
-    this.el.onlineStatus.textContent = text;
+  /** Red "your turn" counters on the Blitz with Friends card and the Online tab. */
+  setOnlineStatus(yourTurnCount = 0) {
+    for (const badge of [this.el.friendsBadge, this.el.onlineTabBadge]) {
+      badge.textContent = yourTurnCount;
+      badge.classList.toggle('hidden', !yourTurnCount);
+    }
+    this.el.friendsBadge.textContent = `${yourTurnCount} YOUR TURN`;
   }
 
   /**
@@ -355,9 +400,8 @@ export class UI {
    * @param view.username    null when logged out (shows the login form)
    * @param view.friends     from Online.friends(), or null while loading
    * @param view.challenges  from Online.challenges(), or null while loading
-   * @param view.difficulty  current difficulty id (friends' bests are shown for it)
    */
-  renderOnline({ username, friends, challenges, difficulty }) {
+  renderOnline({ username, friends, challenges }) {
     const e = this.el;
     e.authForm.classList.toggle('hidden', !!username);
     e.accountBlock.classList.toggle('hidden', !username);
@@ -365,16 +409,38 @@ export class UI {
 
     e.accountName.textContent = username;
     const loading = '<p class="list-empty">Loading…</p>';
+    // Open challenges, plus the last few results (the full history is on each friend's page)
+    const open = challenges?.filter((c) => c.status === 'yourTurn' || c.status === 'waiting') ?? [];
+    const recent = challenges?.filter((c) => !open.includes(c)).slice(0, RECENT_RESULTS) ?? [];
     e.challengeList.innerHTML = !challenges
       ? loading
       : challenges.length
-        ? challenges.map(challengeRow).join('')
-        : '<p class="list-empty">No challenges yet. Challenge a friend below!</p>';
+        ? [...open, ...recent].map(challengeRow).join('')
+        : '<p class="list-empty">No challenges yet. Challenge a friend above!</p>';
     e.friendList.innerHTML = !friends
       ? loading
       : friends.length
-        ? friends.map((f) => friendRow(f, difficulty)).join('')
+        ? friends.map(friendRow).join('')
         : '<p class="list-empty">No friends yet. Add one by their username.</p>';
+  }
+
+  /**
+   * Fill a friend's page. `friend` is null while it loads.
+   * friend = { username, bests, baskets, record: { wins, losses, ties }, games }
+   */
+  renderFriend(username, friend, difficulty) {
+    const e = this.el;
+    e.friendAvatar.textContent = username[0].toUpperCase();
+    e.friendName.textContent = username;
+    if (!friend) {
+      e.friendSub.textContent = 'Loading…';
+      e.friendBody.innerHTML = '';
+      return;
+    }
+    const { wins, losses, ties } = friend.record;
+    const played = friend.games.filter((g) => ['won', 'lost', 'tie'].includes(g.status));
+    e.friendSub.textContent = `🏀 ${friend.baskets.toLocaleString()} lifetime baskets`;
+    e.friendBody.innerHTML = friendPage(friend, { wins, losses, ties, played }, difficulty);
   }
 
   /** Show an error under the login form (or hide it with null). */
@@ -543,21 +609,84 @@ function scoreboard(players, final) {
     .join('');
 }
 
+const RECENT_RESULTS = 5; // finished challenges shown in the online list
+
 /** Mode icons used for friends' best scores. */
 const LEADERBOARD = [
-  ['blitz', '⏱'],
-  ['hothand', '🔥'],
-  ['freethrow', '🎯'],
+  ['blitz', '⏱', 'Blitz'],
+  ['hothand', '🔥', 'Hot Hand'],
+  ['freethrow', '🎯', 'Free Throw'],
 ];
 
-/** A friend: name, their bests on this difficulty, and a Challenge button. */
-function friendRow(friend, difficulty) {
+/** A friend: tap the name for their page, or Challenge them right away. */
+function friendRow(friend) {
   const name = escapeHtml(friend.username);
-  const bests = LEADERBOARD.map(([mode, icon]) => `${icon} ${friend.bests[mode]?.[difficulty] ?? 0}`).join(' · ');
-  return `<div class="online-row">
-    <div class="online-who"><b>${name}</b><small>${bests}</small></div>
+  const { wins, losses, ties } = friend.record;
+  const record = wins + losses + ties ? `${wins}W · ${losses}L${ties ? ` · ${ties}T` : ''} vs you` : 'No games yet';
+  return `<div class="online-row friend">
+    <button type="button" class="friend-open" data-action="friend" data-value="${name}" aria-label="${name}'s stats">
+      <span class="avatar small" aria-hidden="true">${name[0].toUpperCase()}</span>
+      <span class="online-who"><b>${name}</b><small>${record}</small></span>
+      <span class="chevron" aria-hidden="true">›</span>
+    </button>
     <button type="button" class="row-btn" data-action="challenge" data-value="${name}">CHALLENGE</button>
-    <button type="button" class="row-x" data-action="unfriend" data-value="${name}" aria-label="Remove ${name}">×</button>
+  </div>`;
+}
+
+/** The body of a friend's page: record, head-to-head numbers, their bests and game history. */
+function friendPage(friend, { wins, losses, ties, played }, difficulty) {
+  const avg = (list) => (list.length ? (list.reduce((sum, n) => sum + n, 0) / list.length).toFixed(1) : '–');
+  const high = (list) => (list.length ? Math.max(...list) : '–');
+  const mine = played.map((g) => g.myScore);
+  const theirs = played.map((g) => g.theirScore);
+
+  const recordTiles = `<div class="stats record">
+    <div class="win"><span>${wins}</span><small>Wins</small></div>
+    <div class="loss"><span>${losses}</span><small>Losses</small></div>
+    <div><span>${ties}</span><small>Ties</small></div>
+    <div><span>${wins + losses + ties}</span><small>Played</small></div>
+  </div>`;
+
+  const headToHead = played.length
+    ? `<div class="h2h">
+        <div class="h2h-row h2h-labels"><b>You</b><small>Head to head</small><b>${escapeHtml(friend.username)}</b></div>
+        <div class="h2h-row"><span>${avg(mine)}</span><small>Average score</small><span>${avg(theirs)}</span></div>
+        <div class="h2h-row"><span>${high(mine)}</span><small>Highest score</small><span>${high(theirs)}</span></div>
+      </div>`
+    : '';
+
+  const diffName = difficulty[0].toUpperCase() + difficulty.slice(1);
+  const bests = LEADERBOARD.map(
+    ([mode, icon, label]) => `<div><span>${friend.bests[mode]?.[difficulty] ?? 0}</span><small>${icon} ${label}</small></div>`,
+  ).join('');
+
+  const history = friend.games.length
+    ? friend.games.map(historyRow).join('')
+    : '<p class="list-empty">You haven’t played each other yet. Send a challenge!</p>';
+
+  return `${recordTiles}${headToHead}
+    <h2 class="section-title">Their bests · ${diffName}</h2>
+    <div class="stats three">${bests}</div>
+    <h2 class="section-title">Game history</h2>
+    <div class="online-list">${history}</div>`;
+}
+
+/** One line of a friend's game history. */
+function historyRow(g) {
+  const diff = g.difficulty[0].toUpperCase() + g.difficulty.slice(1);
+  const date = new Date(g.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const results = {
+    won: ['WIN', `${g.myScore}–${g.theirScore}`],
+    lost: ['LOSS', `${g.myScore}–${g.theirScore}`],
+    tie: ['TIE', `${g.myScore}–${g.theirScore}`],
+    yourTurn: ['YOUR TURN', '–'],
+    waiting: ['WAITING', `${g.myScore}–?`],
+    declined: ['PASSED', '–'],
+  };
+  const [label, score] = results[g.status];
+  return `<div class="online-row history ${g.status}">
+    <span class="result-tag">${label}</span>
+    <span class="online-who"><b>${score}</b><small>${diff} · ${date}</small></span>
   </div>`;
 }
 

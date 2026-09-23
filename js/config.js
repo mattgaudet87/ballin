@@ -54,6 +54,13 @@ export const CONFIG = {
     // and the rim land on these spots (fractions of the screen height).
     ballScreenY: 0.85,
     rimScreenY: 0.35,
+    // From such a low camera you'd really see the hoop from underneath, so the
+    // rim looks tipped up at you. Games cheat here: anything near the hoop is
+    // drawn as if seen from slightly ABOVE. This is how much of the rim's depth
+    // shows (0 = perfectly flat line, 0.3 = a clear oval). Drawing only.
+    hoopViewTilt: 0.2,
+    // The cheat fades in over this many meters as the ball approaches the hoop
+    hoopViewBlend: 0.7,
   },
 
   physics: {
@@ -94,8 +101,11 @@ export const CONFIG = {
     fireStreak: 3, // makes in a row needed to catch fire
     fireMultiplier: 2, // points are multiplied by this while on fire
     hoopSpeedMax: 2.4, // fastest slide speed (radians/second)
-    resetAfterMake: 0.75, // seconds before the next ball appears
-    resetAfterMiss: 0.5,
+    // Rapid fire: the next ball pops in this many seconds after you shoot,
+    // without waiting to see if the last one goes in (several can fly at once).
+    reloadDelay: 0.2,
+    ballLinger: 1.0, // seconds a ball stays on screen after its make/miss is decided
+    missEndDelay: 0.9, // Hot Hand: pause after the miss before the game over screen
     maxShotTime: 4.5, // give up on a shot after this many seconds
   },
 
@@ -106,6 +116,7 @@ export const CONFIG = {
     baskets: 'ballin.baskets.', // + mode + '.' + difficulty: lifetime baskets made
     difficulty: 'ballin.difficulty',
     playerNames: 'ballin.playerNames',
+    friendsTab: 'ballin.friendsTab', // last Blitz with Friends tab: 'local' | 'online'
     oldBest: 'ballin.bestScore', // from the very first version (Blitz on Hard)
     muted: 'ballin.muted',
     inventory: 'ballin.inventory',

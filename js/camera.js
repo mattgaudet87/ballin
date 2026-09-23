@@ -17,6 +17,7 @@ export const camera = {
   focal: 1, // zoom factor (pixels per meter at 1 meter of depth)
   horizonY: 0, // screen y that is level with the camera's eyes
   centerX: 0, // screen x straight ahead of the camera
+  hoopZ: 3, // where the hoop is (for projectHoop)
 };
 
 /**
@@ -37,6 +38,7 @@ export function fitCamera(width, height, hoopZ) {
   camera.focal = ((cam.ballScreenY - cam.rimScreenY) * height) / (ballDrop - rimDrop);
   camera.horizonY = cam.ballScreenY * height - ballDrop * camera.focal;
   camera.centerX = width / 2;
+  camera.hoopZ = hoopZ;
 }
 
 /**
@@ -52,6 +54,31 @@ export function project(x, y, z) {
     x: camera.centerX + (x - camera.x) * scale,
     y: camera.horizonY + (camera.y - y) * scale,
     scale,
+  };
+}
+
+/**
+ * Like project(), but for things drawn near the hoop: the rim, net, backboard
+ * and the ball when it gets there. Near the hoop everything is flattened onto
+ * the rim's depth and tilted as if seen from slightly above, so the rim looks
+ * like a nice flat oval instead of tipping up at the low camera. Far from the
+ * hoop (the ball at your feet) it's exactly project(). See CONFIG.camera.hoopViewTilt.
+ * Physics never uses this; it's only how things are drawn.
+ */
+export function projectHoop(x, y, z) {
+  const p = project(x, y, z);
+  const cam = CONFIG.camera;
+  // 0 = normal view … 1 = full hoop view (starts hoopViewBlend meters before the rim)
+  const start = camera.hoopZ - CONFIG.hoop.rimRadius - cam.hoopViewBlend;
+  const w = Math.max(0, Math.min(1, (z - start) / cam.hoopViewBlend));
+  if (!p || w === 0) return p;
+
+  const flat = project(x, y, camera.hoopZ);
+  const tiltedY = flat.y - (z - camera.hoopZ) * flat.scale * cam.hoopViewTilt; // further back = higher up
+  return {
+    x: p.x + (flat.x - p.x) * w,
+    y: p.y + (tiltedY - p.y) * w,
+    scale: p.scale + (flat.scale - p.scale) * w,
   };
 }
 

@@ -38,7 +38,6 @@ const TEMPLATES = [
   { type: 'swishes_total', scope: 'total', stat: 'swishes', range: [3, 8], text: (n) => `Hit ${n} swishes` },
   { type: 'swishes_game', scope: 'game', stat: 'swishes', range: [2, 4], text: (n) => `Hit ${n} swishes in one run` },
   { type: 'fire_total', scope: 'total', stat: 'fireCount', range: [1, 3], text: (n) => (n === 1 ? 'Catch fire' : `Catch fire ${n} times`) },
-  { type: 'bank_total', scope: 'total', stat: 'bankShots', range: [2, 5], text: (n) => `Bank in ${n} shots off the glass` },
   { type: 'run_makes', scope: 'game', stat: 'makes', range: [4, 10], text: (n) => `Make ${n} in one run` },
   { type: 'multiplier_total', scope: 'total', stat: 'bigMultiplierMakes', range: [1, 3], text: (n) => (n === 1 ? 'Sink a 3× or bigger basket' : `Sink ${n} baskets worth 3× or more`) },
   { type: 'games_total', scope: 'total', stat: 'games', range: [2, 4], text: (n) => `Play ${n} Hot Hand runs` },
@@ -62,6 +61,8 @@ export class Missions {
   constructor() {
     const saved = loadJSON(CONFIG.storageKeys.missions, null);
     // Drop missions from older versions of the game that no longer exist
+    // (e.g. the old "bank shots off the glass" one: shots always fly the right
+    // distance, so hitting the glass was pure luck). refill() replaces them.
     this.list = (saved?.list ?? []).filter((m) => TEMPLATES.some((t) => t.type === m.type) && 'tier' in m);
     this.completedCount = saved?.completedCount ?? 0; // grows difficulty over time
     this.refill();

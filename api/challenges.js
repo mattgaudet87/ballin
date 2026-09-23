@@ -16,14 +16,10 @@
 import { query } from './_lib/db.js';
 import { endpoint, body, ApiError, findUser } from './_lib/auth.js';
 import { DIFFICULTIES } from '../js/modes.js';
+import { SELECT, fromMySide } from './_lib/challenge-view.js';
 
 const LIST_LIMIT = 30; // how many recent challenges to send back
 const MAX_SCORE = 10_000; // no real 60-second game gets anywhere near this
-
-const SELECT = `SELECT challenges.*, a.username AS from_name, b.username AS to_name
-                  FROM challenges
-                  JOIN users a ON a.id = challenges.from_id
-                  JOIN users b ON b.id = challenges.to_id`;
 
 export default endpoint(async (req, user) => {
   if (req.method === 'GET') {
@@ -72,29 +68,6 @@ export default endpoint(async (req, user) => {
 async function loadChallenge(id, userId) {
   const [row] = await query(`${SELECT} WHERE challenges.id = ?`, [id]);
   return fromMySide(row, userId);
-}
-
-/** Describe a challenge from the point of view of the player asking. */
-function fromMySide(row, userId) {
-  const iSent = row.from_id === userId;
-  const myScore = iSent ? row.from_score : row.to_score;
-  const theirScore = iSent ? row.to_score : row.from_score;
-
-  let status;
-  if (row.status === 'declined') status = 'declined';
-  else if (row.status === 'waiting') status = iSent ? 'waiting' : 'yourTurn';
-  else status = myScore > theirScore ? 'won' : myScore < theirScore ? 'lost' : 'tie';
-
-  return {
-    id: row.id,
-    opponent: iSent ? row.to_name : row.from_name,
-    difficulty: row.difficulty,
-    // Don't reveal the challenger's score before you've played: no peeking at the target!
-    myScore,
-    theirScore: status === 'yourTurn' ? null : theirScore,
-    status,
-    updatedAt: row.updated_at,
-  };
 }
 
 function cleanScore(value) {

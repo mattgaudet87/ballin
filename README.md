@@ -2,7 +2,8 @@
 
 A flick basketball game for your phone (and your Mac). Swipe up on the ball to
 shoot. The ball starts on one of 8 spots across the floor (never the same one twice
-in a row), so **aim is everything**.
+in a row), so **aim is everything**. The next ball pops in right after you shoot, so you can
+fire away without waiting to see if the last one went in.
 
 ## Modes
 
@@ -15,11 +16,13 @@ in a row), so **aim is everything**.
 - **Free Throw:** no clock, no losing, no multipliers. The ball always sits in the middle.
   Your score is how many you've made in a row, and your **record** is your longest streak.
   A miss just resets the streak. Tap **END** when you're done.
-- **Online:** make an account (username + password), add friends by their username and
-  **challenge** them. You play a 60-second Blitz now, your friend plays theirs whenever
-  they like, and the higher score wins. Your friends list shows their best scores.
-- **Blitz with Friends:** pass and play for 2 players. Each player gets 2 rounds of 30 seconds,
-  alternating A, B, A, B, and the highest total wins.
+- **Blitz with Friends** has two tabs:
+  - **Pass and play:** 2 players on one phone. Each player gets 2 rounds of 30 seconds,
+    alternating A, B, A, B, and the highest total wins.
+  - **Online:** make an account (username + password), tap **Add friend** to add friends by
+    username, and **challenge** them. You play a 60-second Blitz now, your friend plays
+    theirs whenever they like, and the higher score wins. Tap a friend to see your record
+    against them, head-to-head averages, their best scores and your full game history.
 
 In Blitz, Hot Hand and the challenges, a **swish** earns a bonus point and **3 in a row** sets you on
 fire for double points. Each mode tracks your best score and your lifetime baskets 🏀 per difficulty, and the home

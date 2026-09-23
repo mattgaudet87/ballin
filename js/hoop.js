@@ -1,14 +1,16 @@
 /**
  * hoop.js
  * ---------------------------------------------------------------------------
- * The hoop: backboard, rim, net and support pole. Handles:
+ * The hoop: backboard, rim, net and support pole. It's drawn with
+ * projectHoop() (see camera.js) so the rim looks flat and natural from our low
+ * camera. Handles:
  *   - sliding side to side once the player's score is high enough
  *   - the springy net animation when a shot goes in
  *   - drawing, split into a BACK layer and a FRONT layer so the ball can
  *     appear to drop *inside* the rim (see render() in main.js)
  */
 import { CONFIG } from './config.js';
-import { project } from './camera.js';
+import { project, projectHoop } from './camera.js';
 
 const TAU = Math.PI * 2;
 const NET_STRANDS = 12; // strings around the rim
@@ -113,7 +115,7 @@ export class Hoop {
    * Draw a glowing multiplier badge (like "3×") above the backboard.
    */
   drawBadge(ctx, text, color, time) {
-    const p = project(this.x, this.boardTop + 0.18, this.boardZ);
+    const p = projectHoop(this.x, this.boardTop + 0.18, this.boardZ);
     if (!p) return;
     const size = Math.max(18, 0.3 * p.scale);
     const pulse = 1 + Math.sin(time * 5) * 0.06;
@@ -170,7 +172,7 @@ export class Hoop {
   drawPole(ctx) {
     const poleZ = this.boardZ + 0.35;
     const bottom = project(this.x, 0, poleZ);
-    const top = project(this.x, this.boardBottom + 0.25, poleZ);
+    const top = projectHoop(this.x, this.boardBottom + 0.25, poleZ);
     if (!bottom || !top) return;
     const w = 0.1 * bottom.scale;
 
@@ -191,8 +193,8 @@ export class Hoop {
 
   drawBoard(ctx) {
     const halfW = this.boardWidth / 2;
-    const tl = project(this.x - halfW, this.boardTop, this.boardZ);
-    const br = project(this.x + halfW, this.boardBottom, this.boardZ);
+    const tl = projectHoop(this.x - halfW, this.boardTop, this.boardZ);
+    const br = projectHoop(this.x + halfW, this.boardBottom, this.boardZ);
     if (!tl || !br) return;
     const s = tl.scale;
     const w = br.x - tl.x;
@@ -223,16 +225,16 @@ export class Hoop {
     ctx.stroke();
 
     // Shooter's square above the rim
-    const sq = project(this.x - 0.3, this.rimY + 0.45, this.boardZ);
-    const sqEnd = project(this.x + 0.3, this.rimY + 0.02, this.boardZ);
+    const sq = projectHoop(this.x - 0.3, this.rimY + 0.45, this.boardZ);
+    const sqEnd = projectHoop(this.x + 0.3, this.rimY + 0.02, this.boardZ);
     ctx.lineWidth = Math.max(2, 0.035 * s);
     ctx.strokeRect(sq.x, sq.y, sqEnd.x - sq.x, sqEnd.y - sq.y);
   }
 
   /** The little metal arm joining the rim to the backboard. */
   drawBracket(ctx) {
-    const a = project(this.x, this.rimY, this.z + this.radius);
-    const b = project(this.x, this.rimY, this.boardZ);
+    const a = projectHoop(this.x, this.rimY, this.z + this.radius);
+    const b = projectHoop(this.x, this.rimY, this.boardZ);
     ctx.strokeStyle = COLORS.rimDark;
     ctx.lineWidth = Math.max(2, 0.07 * a.scale);
     ctx.lineCap = 'butt';
@@ -245,13 +247,13 @@ export class Hoop {
   /** Draw half of the rim: 'back' (far side) or 'front' (near side). */
   drawRim(ctx, half) {
     const start = half === 'back' ? 0 : Math.PI;
-    const center = project(this.x, this.rimY, this.z);
+    const center = projectHoop(this.x, this.rimY, this.z);
     const width = Math.max(2.5, this.tube * 2 * center.scale);
 
     ctx.beginPath();
     for (let i = 0; i <= RIM_SEGMENTS / 2; i++) {
       const a = start + (i / (RIM_SEGMENTS / 2)) * Math.PI;
-      const p = project(this.x + Math.cos(a) * this.radius, this.rimY, this.z + Math.sin(a) * this.radius);
+      const p = projectHoop(this.x + Math.cos(a) * this.radius, this.rimY, this.z + Math.sin(a) * this.radius);
       if (i === 0) ctx.moveTo(p.x, p.y);
       else ctx.lineTo(p.x, p.y);
     }
@@ -282,7 +284,7 @@ export class Hoop {
   /** Draw the diamond-pattern net. Strands on the far side are 'back', near side 'front'. */
   drawNet(ctx, half) {
     const wantBack = half === 'back';
-    const center = project(this.x, this.rimY, this.z);
+    const center = projectHoop(this.x, this.rimY, this.z);
     ctx.strokeStyle = COLORS.net;
     ctx.lineWidth = Math.max(1, 0.011 * center.scale);
     ctx.lineCap = 'round';
@@ -298,8 +300,8 @@ export class Hoop {
           const b = this.netPoint(row + 1, n);
           const isBack = (a.z + b.z) / 2 > this.z;
           if (isBack !== wantBack) continue;
-          const pa = project(a.x, a.y, a.z);
-          const pb = project(b.x, b.y, b.z);
+          const pa = projectHoop(a.x, a.y, a.z);
+          const pb = projectHoop(b.x, b.y, b.z);
           ctx.moveTo(pa.x, pa.y);
           ctx.lineTo(pb.x, pb.y);
         }

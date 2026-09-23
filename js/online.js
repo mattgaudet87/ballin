@@ -56,6 +56,11 @@ export class Online {
     return (await this.request('GET', 'friends')).friends;
   }
 
+  /** One friend's page: { username, bests, baskets, record: { wins, losses, ties }, games } */
+  async friend(username) {
+    return (await this.request('GET', `friends?username=${encodeURIComponent(username)}`)).friend;
+  }
+
   addFriend(username) {
     return this.request('POST', 'friends', { action: 'add', username });
   }

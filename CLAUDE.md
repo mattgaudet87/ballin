@@ -34,7 +34,8 @@ api/                   Vercel serverless functions (server side of online play)
   _lib/db.js           query(sql, args): Turso over HTTP (fetch), or local node:sqlite; creates tables
   _lib/auth.js         scrypt passwords, session tokens, endpoint() wrapper, ApiError, body(), findUser()
   account.js           /api/account: signup, login, logout, who am I
-  friends.js           /api/friends: list (with each friend's bests), add, remove
+  _lib/challenge-view.js  SELECT for challenges + fromMySide() + record() (shared by challenges.js and friends.js)
+  friends.js           /api/friends: list (bests + W/L/T record), ?username= friend page (history), add, remove
   scores.js            /api/scores: upload bests + lifetime baskets (server keeps the MAX), download
   challenges.js        /api/challenges: list, create, finish, decline
 tools/dev.mjs          Local server: static files + api/ (same as Vercel)
@@ -47,7 +48,7 @@ js/
   online.js    Online class: fetch wrapper for /api/*, keeps { username, token } in localStorage
   items.js     Power-ups: specialty balls + energy drinks (ITEMS, DRINK_EFFECTS) and the Inventory class (counts, active boosts, persistence)
   missions.js  Hot Hand missions: templates, 3 active, progress, completed → collect() rolls the hidden reward
-  camera.js    3D → 2D projection (project, unprojectX) and fitCamera() for the screen size
+  camera.js    3D → 2D projection (project, unprojectX), projectHoop (drawing cheat near the hoop), fitCamera()
   main.js      Entry point: setup, screens/menus flow, friends match, game-state machine, main loop, scoring rules, power-ups, render order
   physics.js   aimShot() swipe → launch velocity; stepBall() gravity, rim/board/floor/wall collisions, score detection
   ball.js      Ball state (position, velocity, per-shot flags) and drawing (shading, spinning 3D seams)
@@ -55,7 +56,8 @@ js/
   court.js     Background: brick wall, hardwood floor, court lines, lighting. COURT_THEMES has one look per
                difficulty. Drawn once into a cached canvas on resize / difficulty change
   input.js     Pointer events (touch + mouse) → swipe { dx, dy, speed } → onShoot callback
-  ui.js        HTML overlays: home, Hot Hand hub (missions + locker), friends setup/handoff/results, online screen, game over, reward popup, HUD, trays
+  ui.js        HTML overlays: home, Hot Hand hub (missions + locker), Blitz with Friends (Pass and play / Online tabs),
+               friend page, handoff/results, game over, reward popup, HUD, trays
   audio.js     Web Audio sound effects (synthesized, no files) + mute (saved to localStorage)
   effects.js   Particles, fire trail, floating text, screen shake, on-fire edge glow (screen space)
   storage.js   try/catch-wrapped localStorage helpers (numbers, booleans, JSON)
@@ -71,16 +73,24 @@ js/
   style. The ball rests low (`CONFIG.ball.startY` = 0.4). Because the camera is so close,
   small x offsets for the ball are big on screen, so keep `startXRange` around 0.3 or the
   ball goes off the edge.
+- **Hoop view cheat:** from such a low camera the rim would look tipped up at you. The hoop,
+  backboard and the ball (once it's near the hoop) are drawn with `projectHoop()`, which flattens
+  everything near the hoop onto the rim's depth and tilts it as if seen from slightly above
+  (`CONFIG.camera.hoopViewTilt`, fading in over `hoopViewBlend`). Physics and the court/floor
+  always use the real `project()`.
 - **Game states** (`game.state` in main.js): `menu` → `waiting` → `playing` → `gameover`.
   There is no countdown anywhere. `startGame()` sets everything up in `waiting` and shows the
   "Tap to start" screen (`#tap-start`). One tap calls `beginPlay()`, which starts the clock.
   Blitz with Friends skips it (`tapToStart: false`) because the handoff screen's
   I'm Ready button already is the tap to start. `inGame()` is true in both `waiting` and `playing`.
-- **Screens:** home (difficulty picker + 5 mode cards) → Blitz and Free Throw start right away.
-  Hot Hand opens its hub (play, missions, locker). Online opens the online screen (login
-  form, or challenges + friends). Blitz with Friends opens the setup
-  screen (names), then handoff → round → handoff … → results. Only one `.overlay`
-  screen shows at a time (`ui.showScreen(name)`).
+- **Screens:** home (difficulty picker + 4 mode cards in a 2×2 grid) → Blitz and Free Throw start
+  right away. Hot Hand opens its hub (play, missions, locker). Blitz with Friends opens
+  `showFriendsSetup(tab)` with two tabs (last one saved in `ballin.friendsTab`):
+  **Pass and play** (names → handoff → round → … → results) and **Online** (login form, or
+  Friends with a "+ Add friend" button, then Challenges). Tapping a friend opens the friend page
+  (`showFriend()`: W/L/T, head-to-head averages/highs, their bests, game history). Only one
+  `.overlay` screen shows at a time (`ui.showScreen(name)`). "Your turn" counts show as red
+  badges on the Blitz with Friends card and the Online tab (`ui.setOnlineStatus()`).
 - **Modes** (`game.mode`, from modes.js):
   - **Blitz** is 60 seconds on the clock. On Hard only, the hoop starts moving at 10 points
     (`movingHoop.difficulties: ['hard']`; `hoopRule()` in main.js applies it). Friends and
@@ -140,8 +150,8 @@ js/
   Collect. Each new locker gets the starter pack.
 - **Power-ups** (items.js + `useItem()`/`shoot()` in main.js): tapping a ball in the left tray
   loads it (`inventory.selectedBall`, `ball.skin`), and it's consumed when you shoot. Tapping a
-  drink activates it for 10 shots. `inventory.startShot()` returns a snapshot (`game.shot`)
-  of what the current shot gets, so boosts can't expire mid-flight (`boostOn()`). Active
+  drink activates it for 10 shots. `inventory.startShot()` returns a snapshot (`b.shot` on the
+  flying ball) of what that shot gets, so boosts can't expire mid-flight (`boostOn()`). Active
   boosts are saved, so leftover shots carry into the next game.
 - **Missions** (missions.js, Hot Hand only): 3 are always active and shown only in the Hot
   Hand hub and on its game-over screen. The player sees the target but never the reward.
@@ -154,22 +164,30 @@ js/
   (8) evenly spaced x positions across the difficulty's `startXRange`. It never uses the same
   spot twice in a row (`game.spot`), so every shot needs fresh aim. Free Throw (`fixedSpot`) is always centered. Power barely matters by design
   (`CONFIG.shot.powerForgiveness`, `minPower`/`maxPower`).
-- **Ball states** (`ball.state`): `ready` (waiting for a swipe) or `flying`.
+- **Rapid fire / ball states:** `ball` (main.js, a `let`) is the ball waiting at the bottom;
+  `flying` holds every ball in the air, and several can fly at once. `shoot()` moves `ball` into
+  `flying` with its own `shot` snapshot, then makes a new hidden ball (`state: 'reloading'`)
+  that pops in after `CONFIG.game.reloadDelay` (0.2 s) via `newBall()`. Ball states: `ready`,
+  `flying`, `reloading`. Each flying ball tracks `outcome` (null → 'make'/'miss'), `linger` and
+  `physicsTime`. `window.ballin.ball` is a getter, so it's always the current ready ball.
 - **Main loop** (`frame()` in main.js): `update(dt)`, then `render(time)`. dt is capped at 0.05s.
-- **Physics** runs in fixed 1/240s steps (`updateShot()` in main.js) for stable collisions.
+- **Physics** runs in fixed 1/240s steps (`updateFlyingBall()` in main.js, per ball) for stable collisions.
   `stepBall()` never touches score or sound. It pushes events (`rim`, `board`, `floor`,
   `wall`, `score`) into an array and main.js reacts to them. Keep it that way.
 - **Scoring rule:** a basket counts only when the ball's center crosses the rim plane
   moving *down* while inside the ring (`physics.js`, bottom of `stepBall`). Coming up
   through the ring sets `enteredFromBelow` and voids the shot.
   A **swish** = scored with `touchedRim` and `touchedBoard` both false.
-- **Shot resolution** (`updateShot()` in main.js): a make ends the shot after
-  `resetAfterMake`. A miss is declared once the ball falls below the rim, or goes lost or
-  off-screen, then it resets after `resetAfterMiss`. If time runs out while the ball is
-  in the air, the game ends when that shot finishes (buzzer beaters count).
-- **Draw order fakes depth** (`ballLayer()` + `render()` in main.js): the hoop is drawn
+- **Shot resolution** (`updateShots()` / `updateFlyingBall()` in main.js): each flying ball is
+  decided on its own: `onMake(b, swish)` on a score event, `onMiss(b)` once it falls below the
+  rim or goes lost/off-screen. It stays on screen for `ballLinger`, then it's removed. If time
+  runs out, the game ends once no ball in the air is undecided (buzzer beaters count).
+  Hot Hand: the first miss sets `game.ending` (no more shots, later makes don't count) and
+  the game over screen follows after `missEndDelay`.
+- **Draw order fakes depth** (`ballLayer(b)` + `render()` in main.js): the hoop is drawn
   in two layers (`drawBack`: pole, board, back rim, back net; `drawFront`: front net,
-  front rim). The ball goes before, between or after them depending on its z.
+  front rim). Flying balls are sorted farthest first and each is drawn before, between or
+  after those layers depending on its z. The ready ball is always drawn last.
 - **Shot aiming** (`aimShot()` in physics.js): swipe speed ÷ `perfectSwipeSpeed` gives
   power, which is softened by `powerForgiveness`. The swipe direction is extended up the
   screen to the rim's height and turned back into a world x, then aim assist pulls near
@@ -194,7 +212,7 @@ js/
 - **New sound:** add a method to `SoundFX` in audio.js built from `tone()`/`noise()`, and call it from main.js.
 - **New scoring rule or bonus:** add it in `onMake()` / `onMiss()` in main.js, and put any numbers in `CONFIG.game`.
 - **New physics event** (e.g. hitting the pole): push `{ type: 'pole', speed }` in `stepBall()`,
-  then handle it in the event loop inside `updateShot()`.
+  then handle it in the event loop inside `updateFlyingBall()`.
 - **New online feature:** add an `api/<name>.js` using `endpoint()` from `_lib/auth.js` and
   `query()` from `_lib/db.js` (new tables go in `SCHEMA` with `IF NOT EXISTS`), a method in
   online.js, then UI in ui.js/main.js. Test locally with `node tools/dev.mjs` (edits in `api/_lib/`

@@ -5,11 +5,12 @@
  * (How it MOVES lives in physics.js.)
  *
  * Ball states:
- *   'ready'  — resting at the bottom, waiting for a swipe
- *   'flying' — in the air after a shot
+ *   'ready'     — resting at the bottom, waiting for a swipe
+ *   'flying'    — in the air after a shot (several balls can fly at once)
+ *   'reloading' — hidden for a split second before the next ball pops in
  */
 import { CONFIG } from './config.js';
-import { project } from './camera.js';
+import { project, projectHoop } from './camera.js';
 
 const TAU = Math.PI * 2;
 
@@ -97,6 +98,17 @@ export class Ball {
     this.touchedBoard = false;
     this.scored = false;
     this.enteredFromBelow = false;
+
+    // Set by main.js while the ball is in the air
+    this.shot = null; // power-ups and basket multiplier locked in when it was shot
+    this.outcome = null; // null until decided, then 'make' | 'miss'
+    this.linger = 0; // seconds it stays on screen after being decided
+    this.physicsTime = 0; // time not simulated yet (physics runs in small fixed steps)
+  }
+
+  /** Hide the ball while the next one reloads. */
+  hide() {
+    this.state = 'reloading';
   }
 
   /** Send the ball flying with velocity { vx, vy, vz }. */
@@ -117,7 +129,9 @@ export class Ball {
 
   /** Where the ball is on screen right now (includes the idle bob). */
   screenPosition(time) {
-    const p = project(this.x, this.y, this.z);
+    if (this.state === 'reloading') return null;
+    // projectHoop matches how the hoop is drawn once the ball gets near it
+    const p = projectHoop(this.x, this.y, this.z);
     if (!p) return null;
     let r = this.radius * p.scale;
     let y = p.y;
@@ -130,6 +144,7 @@ export class Ball {
 
   /** A soft shadow on the floor under the ball. */
   drawShadow(ctx) {
+    if (this.state === 'reloading') return;
     const p = project(this.x, 0, this.z);
     if (!p) return;
     const heightFade = Math.max(0, 1 - this.y / 5);

@@ -48,7 +48,11 @@ const courtCtx = courtCanvas.getContext('2d');
 // Screen size in CSS pixels, plus the device pixel ratio (2 or 3 on Retina)
 const view = { width: 0, height: 0, dpr: 1 };
 
-const ball = new Ball();
+// The ball waiting at the bottom, and every ball still in the air. Shooting
+// moves the ready ball into `flying` and a new one reloads almost right away,
+// so you never wait to see if the last shot went in.
+let ball = new Ball();
+const flying = [];
 const hoop = new Hoop();
 const effects = new Effects();
 const audio = new SoundFX();
@@ -81,21 +85,19 @@ const game = {
   shots: 0,
   swishes: 0,
   fireCount: 0,
-  bankShots: 0,
   bigMultiplierMakes: 0,
   itemsUsed: 0,
   startBest: 0, // the record when this game started (to spot a new best)
 
   timeLeft: 0,
-  shotOutcome: null, // null while the ball is still "live", then 'make' | 'miss'
-  resetTimer: 0,
-  basketMultiplier: null, // Hot Hand bonus on the current basket, e.g. { value: 3, color }
-  shot: null, // power-ups used by the ball in the air (from inventory.startShot())
+  reloadTimer: 0, // seconds until the next ball pops in
+  ending: false, // Hot Hand: missed, game over is coming (no more shots)
+  endTimer: 0, // seconds until that game over screen
+  basketMultiplier: null, // Hot Hand bonus on the NEXT ball's basket, e.g. { value: 3, color }
   spot: -1, // which of the ball's starting spots was used last (so it never repeats)
 };
 
 const physicsEvents = [];
-let physicsTime = 0; // leftover time not yet simulated
 
 function loadBests() {
   const bests = {};
@@ -190,7 +192,7 @@ function applyDifficulty(id) {
   showRecords();
   ui.setLockerTitle(game.difficulty.name);
   if (ui.isShowing('hothand')) ui.renderHotHandHub(missionViews(), inventory);
-  if (ui.isShowing('online')) renderOnline(); // friends' bests are per difficulty
+  if (ui.isShowing('friend')) showFriend(friendPage.username); // their bests too
 }
 
 window.addEventListener('resize', resize);
@@ -223,14 +225,13 @@ window.addEventListener('pointerdown', () => audio.unlock());
 
 new SwipeInput(canvas, {
   // Swipes may start anywhere in the lower half, once the ball is ready.
-  canStart: (x, y) => game.state === 'playing' && !timeIsUp() && ball.state === 'ready' && y > view.height * 0.5,
+  canStart: (x, y) => game.state === 'playing' && !timeIsUp() && !game.ending && ball.state === 'ready' && y > view.height * 0.5,
   onShoot: shoot,
 });
 
 ui.onModeSelect((modeId) => {
   if (modeId === 'hothand') showHotHandHub();
-  else if (modeId === 'friends') showFriendsSetup();
-  else if (modeId === 'online') showOnlineHub();
+  else if (modeId === 'friends') showFriendsSetup(loadJSON(KEYS.friendsTab, 'local'));
   else startGame(modeId);
 });
 ui.onDifficulty(applyDifficulty);
@@ -244,35 +245,46 @@ ui.onRematch(() => startMatch(game.match.players.map((p) => p.name)));
 ui.onPlayAgain(() => {
   if (!game.mode.online) startGame(game.mode.id);
   else if (game.challenge?.score != null) sendChallengeResult(); // the send failed: RETRY
-  else showOnlineHub();
+  else showOnline();
 });
 ui.onAuth(logIn);
 ui.onLogout(logOut);
 ui.onAddFriend(addFriend);
-ui.onOnlineList({ challenge: challengeFriend, play: playChallenge, decline: declineChallenge, unfriend: removeFriend });
+ui.onOnlineList({ friend: showFriend, challenge: challengeFriend, play: playChallenge, decline: declineChallenge });
+ui.onFriendsTab((tab) => showFriendsSetup(tab));
+ui.onFriendPage({
+  back: showOnline,
+  challenge: () => challengeFriend(friendPage.username),
+  remove: () => removeFriend(friendPage.username),
+});
 ui.onCollect(collectReward);
 ui.onItem(useItem);
 ui.onMute(() => ui.setMuted(audio.toggleMute()));
 // Free Throw has no clock and no way to lose, so END finishes the session
 ui.onEnd(() => {
-  if (inGame() && game.mode.endless && ball.state === 'ready') endGame();
+  if (inGame() && game.mode.endless) endGame();
 });
 ui.setMuted(audio.muted);
 
-/** Launch the ball based on the player's swipe. */
+/** Launch the ball based on the player's swipe, then reload right away. */
 function shoot(swipe) {
-  if (game.state !== 'playing' || ball.state !== 'ready') return;
+  if (game.state !== 'playing' || game.ending || ball.state !== 'ready') return;
 
-  // Lock in the power-ups (Hot Hand only) and basket multiplier for this shot
-  game.shot = game.mode.powerUps ? inventory.startShot() : { ballMultiplier: 1, greenMultiplier: 1, itemsUsed: 0 };
-  game.shot.basket = game.basketMultiplier;
-  game.itemsUsed += game.shot.itemsUsed;
+  // Lock in the power-ups (Hot Hand only) and basket multiplier for this ball
+  const shot = game.mode.powerUps ? inventory.startShot() : { ballMultiplier: 1, greenMultiplier: 1, itemsUsed: 0 };
+  shot.basket = game.basketMultiplier;
+  game.itemsUsed += shot.itemsUsed;
+  ball.shot = shot;
 
   ball.launch(aimShot(swipe, ball, hoop, game.difficulty));
-  physicsTime = 0;
+  flying.push(ball);
   game.shots++;
-  game.shotOutcome = null;
   audio.whoosh();
+
+  // The next ball pops in a split second later (see update())
+  ball = new Ball();
+  ball.hide();
+  game.reloadTimer = G.reloadDelay;
 }
 
 /** The player tapped a power-up in the in-game tray. */
@@ -281,8 +293,7 @@ function useItem(id) {
   const item = ITEMS[id];
 
   if (item.type === 'ball') {
-    if (ball.state !== 'ready') return; // can't swap balls mid-flight
-    inventory.toggleBall(id);
+    inventory.toggleBall(id); // loads onto the ball at the bottom (or the next one)
     ball.skin = inventory.selectedBall;
     if (ball.skin) audio.select();
   } else if (inventory.activateDrink(id)) {
@@ -314,10 +325,23 @@ function showHotHandHub() {
   ui.showScreen('hothand');
 }
 
-function showFriendsSetup() {
+/**
+ * Blitz with Friends: `tab` is 'local' (pass and play on this phone) or
+ * 'online' (log in, challenges, friends). The last tab used is remembered.
+ */
+function showFriendsSetup(tab) {
   game.state = 'menu';
+  game.challenge = null;
+  newBall();
+  saveJSON(KEYS.friendsTab, tab);
   ui.setPlayerNames(loadJSON(KEYS.playerNames, []));
   ui.showScreen('friends');
+  ui.setFriendsTab(tab);
+  if (tab === 'online') {
+    ui.showOnlineError(null);
+    renderOnline();
+    refreshOnline();
+  }
 }
 
 /** What the mission cards need to show (the reward stays secret). */
@@ -380,20 +404,32 @@ function endRound() {
 
 // --- Online ----------------------------------------------------------------------
 
-function showOnlineHub() {
-  game.state = 'menu';
-  game.challenge = null;
-  newBall();
-  ui.showOnlineError(null);
-  ui.showScreen('online');
-  renderOnline();
-  refreshOnline();
+/** The Online tab of Blitz with Friends. */
+function showOnline() {
+  showFriendsSetup('online');
 }
 
 function renderOnline() {
-  ui.renderOnline({ username: online.username, ...onlineView, difficulty: game.difficulty.id });
+  ui.renderOnline({ username: online.username, ...onlineView });
   const yourTurn = onlineView.challenges?.filter((c) => c.status === 'yourTurn').length ?? 0;
-  ui.setOnlineStatus(online.username, yourTurn);
+  ui.setOnlineStatus(yourTurn);
+}
+
+// The friend whose page is open
+const friendPage = { username: null };
+
+/** Open a friend's page: your record against them, their bests and your game history. */
+async function showFriend(username) {
+  friendPage.username = username;
+  ui.renderFriend(username, null, game.difficulty.id);
+  ui.showScreen('friend');
+  try {
+    const friend = await online.friend(username);
+    if (friendPage.username === username) ui.renderFriend(username, friend, game.difficulty.id);
+  } catch (err) {
+    showOnline();
+    ui.showOnlineError(err.message);
+  }
 }
 
 /** Download the latest friends list and challenges, then redraw. */
@@ -419,7 +455,7 @@ async function logIn(action, username, password) {
   }
   Object.assign(onlineView, { friends: null, challenges: null });
   syncScores();
-  showOnlineHub();
+  showOnline();
 }
 
 async function logOut() {
@@ -479,6 +515,7 @@ async function addFriend(username, clearInput) {
 
 async function removeFriend(username) {
   if (!confirm(`Remove ${username} from your friends?`)) return;
+  showOnline();
   try {
     await online.removeFriend(username);
   } catch (err) {
@@ -559,13 +596,15 @@ function startGame(modeId, { tapToStart = true } = {}) {
     shots: 0,
     swishes: 0,
     fireCount: 0,
-    bankShots: 0,
     bigMultiplierMakes: 0,
     itemsUsed: 0,
     startBest: game.best[modeId][game.difficulty.id],
     timeLeft: mode.duration,
-    shotOutcome: null,
+    reloadTimer: 0,
+    ending: false,
+    endTimer: 0,
   });
+  flying.length = 0;
   hoop.reset();
   effects.reset();
   newBall();
@@ -591,6 +630,8 @@ function inGame() {
 
 function endGame() {
   const mode = game.mode;
+  flying.length = 0; // balls still in the air don't count any more
+  game.ending = false;
   inventory.selectedBall = null; // unused balls go back in the locker
   const diff = game.difficulty.id;
   saveNumber(`${KEYS.baskets}${mode.id}.${diff}`, game.lifetime[mode.id][diff]);
@@ -658,7 +699,6 @@ function gameStats() {
     swishes: game.swishes,
     bestStreak: game.bestStreak,
     fireCount: game.fireCount,
-    bankShots: game.bankShots,
     bigMultiplierMakes: game.bigMultiplierMakes,
     itemsUsed: game.itemsUsed,
     games: 1,
@@ -678,7 +718,6 @@ function newBall() {
   const randomSpot = inGame() && !game.mode.fixedSpot;
   ball.reset(randomSpot ? randomStartX() : CONFIG.ball.startX);
   ball.skin = inGame() && game.mode.powerUps ? inventory.selectedBall : null;
-  game.shot = null;
 
   // Hot Hand: maybe put a multiplier on the next basket
   game.basketMultiplier = inGame() && game.mode.basketMultipliers ? rollBasketMultiplier() : null;
@@ -712,12 +751,9 @@ function updateTimer(dt) {
   if (game.timeLeft > 0 && game.timeLeft <= 5 && Math.ceil(before) !== Math.ceil(game.timeLeft)) {
     audio.tick();
   }
-  if (game.timeLeft === 0) {
-    audio.buzzer();
-    // A shot already in the air still counts (buzzer beater!); we end the
-    // game when it lands instead — see finishShot().
-    if (ball.state !== 'flying') endGame();
-  }
+  // Balls already in the air still count (buzzer beaters!). The game ends
+  // once they're all decided, see updateShots().
+  if (game.timeLeft === 0) audio.buzzer();
 }
 
 // ---------------------------------------------------------------------------
@@ -725,12 +761,12 @@ function updateTimer(dt) {
 // ---------------------------------------------------------------------------
 
 /**
- * Is a power-up effect on right now? While a ball is in the air we use the
- * power-ups it was shot with, so a boost can't run out mid-flight.
+ * Is a power-up effect on right now? Balls in the air keep the power-ups they
+ * were shot with, so a boost can't run out mid-flight.
  */
 function boostOn(effect) {
   if (!inGame() || !game.mode.powerUps) return false;
-  if (game.shot) return game.shot[effect];
+  if (flying.some((b) => b.outcome === null && b.shot[effect])) return true;
   return effect === 'bigHoop' ? inventory.isActive('white') : inventory.isActive('orange');
 }
 
@@ -760,14 +796,34 @@ function hoopSpeed() {
 // Shots: making, missing and resetting
 // ---------------------------------------------------------------------------
 
-function updateShot(dt) {
-  if (ball.state !== 'flying') return;
+/** Move every ball in the air, react to what they hit, and decide makes/misses. */
+function updateShots(dt) {
+  for (const b of flying) updateFlyingBall(b, dt);
 
+  // Balls that were decided a while ago (or left the court) disappear
+  for (let i = flying.length - 1; i >= 0; i--) {
+    const b = flying[i];
+    const gone = b.flightTime > G.maxShotTime || Math.abs(b.x) > 6;
+    if (b.outcome !== null && (b.linger <= 0 || gone)) flying.splice(i, 1);
+  }
+
+  if (game.state !== 'playing') return;
+  // Hot Hand: the miss happened, show the game over after a short pause
+  if (game.ending) {
+    game.endTimer -= dt;
+    if (game.endTimer <= 0) endGame();
+    return;
+  }
+  // Time's up and every ball in the air has landed
+  if (timeIsUp() && !flying.some((b) => b.outcome === null)) endGame();
+}
+
+function updateFlyingBall(b, dt) {
   // Run the physics in small fixed steps for accurate bounces.
-  physicsTime += dt;
-  while (physicsTime >= PHYSICS_STEP) {
-    stepBall(ball, hoop, PHYSICS_STEP, physicsEvents);
-    physicsTime -= PHYSICS_STEP;
+  b.physicsTime += dt;
+  while (b.physicsTime >= PHYSICS_STEP) {
+    stepBall(b, hoop, PHYSICS_STEP, physicsEvents);
+    b.physicsTime -= PHYSICS_STEP;
   }
 
   // React to whatever happened during those steps.
@@ -779,35 +835,35 @@ function updateShot(dt) {
       audio.board(event.speed);
     } else if (event.type === 'floor' || event.type === 'wall') {
       audio.bounce(event.speed);
-    } else if (event.type === 'score') {
-      onMake(event.swish);
+    } else if (event.type === 'score' && b.outcome === null) {
+      onMake(b, event.swish);
     }
   }
   physicsEvents.length = 0;
 
-  // Decide if the shot is over.
-  if (game.shotOutcome === null) {
-    const belowRimFalling = ball.y < hoop.rimY - 0.3 && ball.vy < 0 && ball.flightTime > 0.3;
-    const lost = ball.flightTime > G.maxShotTime || Math.abs(ball.x) > 6;
-    if (belowRimFalling || lost) onMiss();
+  // A miss: it's falling below the rim, or it flew off / took too long
+  if (b.outcome === null) {
+    const belowRimFalling = b.y < hoop.rimY - 0.3 && b.vy < 0 && b.flightTime > 0.3;
+    const lost = b.flightTime > G.maxShotTime || Math.abs(b.x) > 6;
+    if (belowRimFalling || lost) onMiss(b);
   } else {
-    game.resetTimer -= dt;
-    if (game.resetTimer <= 0) finishShot();
+    b.linger -= dt;
   }
 }
 
-function onMake(swish) {
-  const shot = game.shot ?? { ballMultiplier: 1, greenMultiplier: 1, basket: null, ball: null };
+/** Ball `b` went in. */
+function onMake(b, swish) {
+  b.outcome = 'make';
+  b.linger = G.ballLinger;
+  if (game.ending || game.state !== 'playing') return; // Hot Hand run already over
+
+  const shot = b.shot;
   const rule = hoopRule();
   const hoopStatBefore = rule ? game[rule.stat] : 0;
-
-  game.shotOutcome = 'make';
-  game.resetTimer = G.resetAfterMake;
   game.makes++;
   game.lifetime[game.mode.id][game.difficulty.id]++;
   game.streak++;
   game.bestStreak = Math.max(game.bestStreak, game.streak);
-  if (ball.touchedBoard) game.bankShots++;
   const fire = game.mode.fire;
   if (fire && game.streak === G.fireStreak) game.fireCount++;
   const onFireNow = fire && game.streak >= G.fireStreak;
@@ -868,11 +924,16 @@ function onMake(swish) {
   }
 }
 
-function onMiss() {
-  game.shotOutcome = 'miss';
-  game.resetTimer = G.resetAfterMiss;
+/** Ball `b` missed. */
+function onMiss(b) {
+  b.outcome = 'miss';
+  b.linger = G.ballLinger;
+  if (game.ending || game.state !== 'playing') return;
+
   if (game.mode.endsOnMiss) {
-    game.resetTimer += 0.4; // a beat longer so the miss sinks in
+    // Hot Hand: one miss ends it (after a beat, so the miss sinks in)
+    game.ending = true;
+    game.endTimer = G.missEndDelay;
     effects.floatText(view.width / 2, view.height * 0.5, 'MISS', { color: '#ff5a5a', size: 54, life: 1.2 });
   } else if (isOnFire()) {
     effects.floatText(view.width / 2, view.height * 0.5, 'FIRE’S OUT', { color: '#9aa7c7', size: 30 });
@@ -883,17 +944,6 @@ function onMiss() {
   if (game.mode.streakScoring) game.score = 0;
 }
 
-/** The shot is done: bring out a fresh ball, or end the game. */
-function finishShot() {
-  const outcome = game.shotOutcome;
-  game.shotOutcome = null;
-  if (game.state === 'playing') {
-    if (game.mode.endsOnMiss && outcome === 'miss') return endGame();
-    if (timeIsUp()) return endGame();
-  }
-  newBall();
-}
-
 // ---------------------------------------------------------------------------
 // Main loop
 // ---------------------------------------------------------------------------
@@ -901,13 +951,22 @@ function finishShot() {
 function update(dt) {
   updateTimer(dt);
   hoop.update(dt, hoopSpeed(), boostOn('bigHoop') ? DRINK_EFFECTS.bigHoopScale : 1);
-  ball.update(dt);
-  updateShot(dt);
 
-  // Flames behind the ball while on fire
+  // Pop in the next ball once the short reload is over
+  if (ball.state === 'reloading') {
+    game.reloadTimer -= dt;
+    if (game.reloadTimer <= 0) newBall();
+  }
+  ball.update(dt);
+  for (const b of flying) b.update(dt);
+  updateShots(dt);
+
+  // Flames behind the balls while on fire
   if (isOnFire()) {
-    const s = ball.screenPosition(performance.now() / 1000);
-    if (s) effects.fireTrail(s.x, s.y, s.r);
+    for (const b of [ball, ...flying]) {
+      const s = b.screenPosition(performance.now() / 1000);
+      if (s) effects.fireTrail(s.x, s.y, s.r);
+    }
   }
   effects.update(dt);
 
@@ -947,16 +1006,24 @@ function hudInfo() {
 }
 
 /**
- * Which layer should the ball be drawn on? Painting order fakes 3D depth:
- *  - 'behindBoard': flew past the backboard → draw ball first
+ * Which layer should ball `b` be drawn on? Painting order fakes 3D depth:
+ *  - 'behindBoard': flew past the backboard → drawn before the hoop
  *  - 'insideHoop':  past the front of the rim → between the back and front of the hoop
- *  - 'front':       in front of the hoop → draw ball last
+ *  - 'front':       in front of the hoop → drawn after the hoop
  */
-function ballLayer() {
-  if (ball.z > hoop.boardZ) return 'behindBoard';
-  const dx = ball.x - hoop.x;
+function ballLayer(b) {
+  if (b.z > hoop.boardZ) return 'behindBoard';
+  const dx = b.x - hoop.x;
   const rimFrontZ = Math.abs(dx) < hoop.radius ? hoop.z - Math.sqrt(hoop.radius ** 2 - dx * dx) : hoop.z;
-  return ball.z > rimFrontZ ? 'insideHoop' : 'front';
+  return b.z > rimFrontZ ? 'insideHoop' : 'front';
+}
+
+/** The multiplier badge to show: the newest ball in the air that has one, else the next ball's. */
+function shownMultiplier() {
+  for (let i = flying.length - 1; i >= 0; i--) {
+    if (flying[i].outcome === null && flying[i].shot.basket) return flying[i].shot.basket;
+  }
+  return game.basketMultiplier;
 }
 
 function render(time) {
@@ -970,32 +1037,28 @@ function render(time) {
   ctx.translate(shakeX, shakeY);
 
   ctx.drawImage(courtCanvas, 0, 0, width, height);
+  for (const b of flying) b.drawShadow(ctx);
   ball.drawShadow(ctx);
 
   // Hot Hand multiplier badge floats above the backboard
-  if (game.basketMultiplier && inGame()) {
-    hoop.drawBadge(ctx, `${game.basketMultiplier.value}×`, game.basketMultiplier.color, time);
-  }
+  const badge = inGame() && shownMultiplier();
+  if (badge) hoop.drawBadge(ctx, `${badge.value}×`, badge.color, time);
+
+  // Sort the balls in the air into layers, farthest first, then paint:
+  // balls behind the board → back of hoop → balls inside the rim → front of
+  // hoop → balls in front (and the ready ball last, it's the closest).
+  const layers = { behindBoard: [], insideHoop: [], front: [] };
+  for (const b of [...flying].sort((a, c) => c.z - a.z)) layers[ballLayer(b)].push(b);
+  layers.front.push(ball);
 
   const onFire = isOnFire();
-  const drawBall = () => {
-    effects.drawFlames(ctx);
-    ball.draw(ctx, time, onFire);
-  };
-  const layer = ballLayer();
-  if (layer === 'behindBoard') {
-    drawBall();
-    hoop.drawBack(ctx);
-    hoop.drawFront(ctx);
-  } else if (layer === 'insideHoop') {
-    hoop.drawBack(ctx);
-    drawBall();
-    hoop.drawFront(ctx);
-  } else {
-    hoop.drawBack(ctx);
-    hoop.drawFront(ctx);
-    drawBall();
-  }
+  const drawBalls = (list) => list.forEach((b) => b.draw(ctx, time, onFire));
+  drawBalls(layers.behindBoard);
+  hoop.drawBack(ctx);
+  drawBalls(layers.insideHoop);
+  hoop.drawFront(ctx);
+  effects.drawFlames(ctx);
+  drawBalls(layers.front);
 
   effects.draw(ctx);
   ctx.restore();
@@ -1023,4 +1086,7 @@ refreshOnline();
 syncScores();
 
 // Handy for debugging in the browser console, e.g. ballin.inventory.add('gold', 5)
-window.ballin = { game, ball, hoop, inventory, missions, online, CONFIG };
+window.ballin = {
+  game, hoop, inventory, missions, online, CONFIG, flying,
+  get ball() { return ball; }, // the ball waiting at the bottom (a new one after every shot)
+};
