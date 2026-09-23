@@ -21,8 +21,8 @@ import { UI } from './ui.js';
 import { SoundFX } from './audio.js';
 import { Effects } from './effects.js';
 import { drawCourt } from './court.js';
-import { loadNumber, saveNumber } from './storage.js';
-import { MODES, rollBasketMultiplier } from './modes.js';
+import { loadNumber, saveNumber, loadJSON, saveJSON } from './storage.js';
+import { MODES, DIFFICULTIES, rollBasketMultiplier } from './modes.js';
 import { Inventory, ITEMS, DRINK_EFFECTS } from './items.js';
 import { Missions } from './missions.js';
 
@@ -57,7 +57,10 @@ const missions = new Missions();
 const game = {
   state: 'menu', // 'menu' | 'countdown' | 'playing' | 'gameover'
   mode: MODES.blitz,
-  best: loadBests(), // { blitz: 0, hothand: 0 }
+  difficulty: DIFFICULTIES[loadJSON(KEYS.difficulty, 'normal')] ?? DIFFICULTIES.normal,
+  best: loadBests(), // best[modeId][difficultyId]
+  lifetime: loadLifetime(), // lifetime baskets per mode
+  match: null, // Blitz with Friends: { players: [{ name, rounds, total }], turn }
 
   // Per-game stats (reset in startGame)
   score: 0,
@@ -85,9 +88,26 @@ let physicsTime = 0; // leftover time not yet simulated
 
 function loadBests() {
   const bests = {};
-  for (const id of Object.keys(MODES)) bests[id] = loadNumber(KEYS.best + id, 0);
-  // Keep the best score from before modes existed
-  bests.blitz = Math.max(bests.blitz, loadNumber(KEYS.oldBest, 0));
+  for (const mode of Object.keys(MODES)) {
+    bests[mode] = {};
+    for (const diff of Object.keys(DIFFICULTIES)) bests[mode][diff] = loadNumber(`${KEYS.best}${mode}.${diff}`, 0);
+    // Older versions had no difficulties; their scores were on today's Hard.
+    bests[mode].hard = Math.max(bests[mode].hard, loadNumber(KEYS.best + mode, 0));
+  }
+  bests.blitz.hard = Math.max(bests.blitz.hard, loadNumber(KEYS.oldBest, 0));
+  return bests;
+}
+
+function loadLifetime() {
+  const lifetime = {};
+  for (const mode of Object.keys(MODES)) lifetime[mode] = loadNumber(KEYS.baskets + mode, 0);
+  return lifetime;
+}
+
+/** Best scores for the current difficulty, e.g. { blitz: 12, hothand: 40 }. */
+function currentBests() {
+  const bests = {};
+  for (const mode of Object.keys(MODES)) bests[mode] = game.best[mode][game.difficulty.id];
   return bests;
 }
 
@@ -109,15 +129,26 @@ function resize() {
     c.width = Math.round(view.width * view.dpr);
     c.height = Math.round(view.height * view.dpr);
   }
-  fitCamera(view.width, view.height);
+  fitCamera(view.width, view.height, hoop.baseZ);
 
   // Redraw the cached background at the new size
   courtCtx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
-  drawCourt(courtCtx, view.width, view.height);
+  drawCourt(courtCtx, view.width, view.height, hoop);
+}
+
+/** Switch difficulty: moves the hoop, refits the camera and redraws the court. */
+function applyDifficulty(id) {
+  game.difficulty = DIFFICULTIES[id];
+  saveJSON(KEYS.difficulty, id);
+  hoop.setDistance(game.difficulty.hoopZ, game.difficulty.hoopRange);
+  resize();
+  ui.setDifficulty(id);
+  ui.setRecords(currentBests(), game.lifetime);
 }
 
 window.addEventListener('resize', resize);
 window.visualViewport?.addEventListener('resize', resize);
+hoop.setDistance(game.difficulty.hoopZ, game.difficulty.hoopRange);
 resize();
 
 // ---------------------------------------------------------------------------
@@ -149,9 +180,19 @@ new SwipeInput(canvas, {
   onShoot: shoot,
 });
 
-ui.onModeSelect(startGame);
+ui.onModeSelect((modeId) => {
+  if (modeId === 'hothand') showHotHandHub();
+  else if (modeId === 'friends') showFriendsSetup();
+  else startGame(modeId);
+});
+ui.onDifficulty(applyDifficulty);
+ui.onHome(showHome);
+ui.onHotHandPlay(() => startGame('hothand'));
+ui.onFriendsStart(startMatch);
+ui.onHandoffReady(() => startGame('friends'));
+ui.onRematch(() => startMatch(game.match.players.map((p) => p.name)));
 ui.onPlayAgain(() => startGame(game.mode.id));
-ui.onMenu(showMenu);
+ui.onCollect(collectReward);
 ui.onItem(useItem);
 ui.onMute(() => ui.setMuted(audio.toggleMute()));
 ui.setMuted(audio.muted);
@@ -160,12 +201,12 @@ ui.setMuted(audio.muted);
 function shoot(swipe) {
   if (game.state !== 'playing' || ball.state !== 'ready') return;
 
-  // Lock in the power-ups (and basket multiplier) for this shot
-  game.shot = inventory.startShot();
+  // Lock in the power-ups (Hot Hand only) and basket multiplier for this shot
+  game.shot = game.mode.powerUps ? inventory.startShot() : { ballMultiplier: 1, greenMultiplier: 1, itemsUsed: 0 };
   game.shot.basket = game.basketMultiplier;
   game.itemsUsed += game.shot.itemsUsed;
 
-  ball.launch(aimShot(swipe, ball, hoop));
+  ball.launch(aimShot(swipe, ball, hoop, game.difficulty));
   physicsTime = 0;
   game.shots++;
   game.shotOutcome = null;
@@ -174,7 +215,7 @@ function shoot(swipe) {
 
 /** The player tapped a power-up in the in-game tray. */
 function useItem(id) {
-  if (game.state !== 'playing' && game.state !== 'countdown') return;
+  if ((game.state !== 'playing' && game.state !== 'countdown') || !game.mode.powerUps) return;
   const item = ITEMS[id];
 
   if (item.type === 'ball') {
@@ -194,22 +235,97 @@ function useItem(id) {
 // Game flow
 // ---------------------------------------------------------------------------
 
-function showMenu() {
+// --- Menus -----------------------------------------------------------------
+
+function showHome() {
   game.state = 'menu';
   newBall();
-  ui.showMenu({
-    bests: game.best,
-    missions: missions.list.map((m) => ({ ...m, text: missions.describe(m) })),
-    inventory,
+  ui.setRecords(currentBests(), game.lifetime);
+  ui.showScreen('home');
+}
+
+function showHotHandHub() {
+  game.state = 'menu';
+  newBall();
+  ui.setRecords(currentBests(), game.lifetime);
+  ui.renderHotHandHub(missionViews(), inventory);
+  ui.showScreen('hothand');
+}
+
+function showFriendsSetup() {
+  game.state = 'menu';
+  ui.setPlayerNames(loadJSON(KEYS.playerNames, []));
+  ui.showScreen('friends');
+}
+
+/** What the mission cards need to show (the reward stays secret). */
+function missionViews() {
+  return missions.list.map((m) => ({ text: missions.describe(m), progress: m.progress, target: m.target, completed: m.completed }));
+}
+
+/** "Collect reward" tapped: reveal the prize in a popup, then refresh the lists. */
+function collectReward(index) {
+  const items = missions.collect(index);
+  if (!items.length) return;
+  for (const id of items) inventory.add(id);
+  audio.missionComplete();
+  ui.showRewardPopup(items, () => {
+    if (game.state === 'gameover') ui.renderGameOverMissions(missionViews());
+    else ui.renderHotHandHub(missionViews(), inventory);
   });
 }
 
+// --- Blitz with Friends ------------------------------------------------------
+
+/** Start a pass-and-play match. Turns go A, B, A, B. */
+function startMatch(names) {
+  saveJSON(KEYS.playerNames, names);
+  game.match = { players: names.map((name) => ({ name, rounds: [], total: 0 })), turn: 0 };
+  showHandoff();
+}
+
+function totalTurns() {
+  const rule = MODES.friends.passAndPlay;
+  return rule.players * rule.roundsEach;
+}
+
+function currentPlayer() {
+  const { players, turn } = game.match;
+  return players[turn % players.length];
+}
+
+function showHandoff() {
+  game.state = 'menu';
+  newBall();
+  ui.showHandoff({ round: game.match.turn + 1, totalRounds: totalTurns(), name: currentPlayer().name, players: game.match.players });
+}
+
+/** A friends round just ended: record it, then hand off or show the results. */
+function endRound() {
+  const player = currentPlayer();
+  player.rounds.push(game.score - player.total);
+  player.total = game.score;
+  game.match.turn++;
+  if (game.match.turn < totalTurns()) {
+    showHandoff();
+  } else {
+    game.state = 'menu';
+    newBall();
+    ui.showResults({ players: game.match.players });
+    setTimeout(() => audio.newBest(), 300);
+  }
+}
+
+// --- Playing -------------------------------------------------------------------
+
 function startGame(modeId) {
   audio.unlock();
+  const mode = MODES[modeId];
   Object.assign(game, {
-    mode: MODES[modeId],
+    mode,
     state: 'countdown',
-    score: 0,
+    // In Blitz with Friends each round continues the player's running total
+    score: mode.passAndPlay ? currentPlayer().total : 0,
     streak: 0,
     bestStreak: 0,
     makes: 0,
@@ -219,7 +335,7 @@ function startGame(modeId) {
     bankShots: 0,
     bigMultiplierMakes: 0,
     itemsUsed: 0,
-    timeLeft: MODES[modeId].duration,
+    timeLeft: mode.duration,
     countdown: G.countdownFrom,
     countdownShown: null,
     shotOutcome: null,
@@ -227,35 +343,40 @@ function startGame(modeId) {
   hoop.reset();
   effects.reset();
   newBall();
-  ui.showGame();
+  ui.showGame({ powerUps: mode.powerUps });
 }
 
 function endGame() {
   const mode = game.mode;
-  game.state = 'gameover';
   inventory.selectedBall = null; // unused balls go back in the locker
+  saveNumber(KEYS.baskets + mode.id, game.lifetime[mode.id]);
 
-  const isNewBest = game.score > game.best[mode.id];
+  if (mode.passAndPlay) return endRound();
+  game.state = 'gameover';
+
+  const diff = game.difficulty.id;
+  const isNewBest = game.score > game.best[mode.id][diff];
   if (isNewBest) {
-    game.best[mode.id] = game.score;
-    saveNumber(KEYS.best + mode.id, game.score);
+    game.best[mode.id][diff] = game.score;
+    saveNumber(`${KEYS.best}${mode.id}.${diff}`, game.score);
     setTimeout(() => audio.newBest(), 500);
   }
 
-  // Missions: record this game and pay out rewards for anything completed.
-  const results = missions.applyGame(gameStats());
-  const completed = results.filter((r) => r.completed);
-  for (const r of completed) {
-    for (const id of r.mission.reward) inventory.add(id);
+  // Hot Hand missions: record progress. Rewards wait for "Collect reward".
+  let missionInfo = null;
+  if (mode.missions) {
+    const results = missions.applyGame(gameStats());
+    missionInfo = { views: missionViews(), results };
+    if (results.some((r) => r.justCompleted)) setTimeout(() => audio.missionComplete(), 1100);
   }
-  if (completed.length) setTimeout(() => audio.missionComplete(), 1100);
 
   ui.showGameOver({
     ...game,
-    title: mode.timed ? 'TIME’S UP' : `${mode.name.toUpperCase()} · MISSED`,
-    best: game.best[mode.id],
+    title: `${mode.timed ? 'TIME’S UP' : 'MISSED'} · ${game.difficulty.name.toUpperCase()}`,
+    best: game.best[mode.id][diff],
+    lifetime: game.lifetime[mode.id],
     isNewBest,
-    results,
+    missions: missionInfo,
   });
   newBall();
 }
@@ -271,8 +392,6 @@ function gameStats() {
     bankShots: game.bankShots,
     bigMultiplierMakes: game.bigMultiplierMakes,
     itemsUsed: game.itemsUsed,
-    hotHandMakes: game.mode.id === 'hothand' ? game.makes : 0,
-    blitzPoints: game.mode.id === 'blitz' ? game.score : 0,
     games: 1,
   };
 }
@@ -288,9 +407,9 @@ function timeIsUp() {
 /** Bring out a fresh ball (random spot in a game, centered in menus). */
 function newBall() {
   const inGame = game.state === 'playing' || game.state === 'countdown';
-  const range = CONFIG.ball.startXRange;
+  const range = game.difficulty.startXRange;
   ball.reset(inGame ? (Math.random() * 2 - 1) * range : CONFIG.ball.startX);
-  ball.skin = inGame ? inventory.selectedBall : null;
+  ball.skin = inGame && game.mode.powerUps ? inventory.selectedBall : null;
   game.shot = null;
 
   // Hot Hand: maybe put a multiplier on the next basket
@@ -342,7 +461,7 @@ function updateTimer(dt) {
  * power-ups it was shot with, so a boost can't run out mid-flight.
  */
 function boostOn(effect) {
-  if (game.state !== 'playing' && game.state !== 'countdown') return false;
+  if ((game.state !== 'playing' && game.state !== 'countdown') || !game.mode.powerUps) return false;
   if (game.shot) return game.shot[effect];
   return effect === 'bigHoop' ? inventory.isActive('white') : inventory.isActive('orange');
 }
@@ -406,6 +525,7 @@ function onMake(swish) {
   game.shotOutcome = 'make';
   game.resetTimer = G.resetAfterMake;
   game.makes++;
+  game.lifetime[game.mode.id]++;
   game.streak++;
   game.bestStreak = Math.max(game.bestStreak, game.streak);
   if (ball.touchedBoard) game.bankShots++;
@@ -504,15 +624,19 @@ function update(dt) {
 
   if (game.state === 'playing' || game.state === 'countdown') {
     const seconds = Math.ceil(game.timeLeft);
+    const friends = game.mode.passAndPlay;
+    const best = Math.max(game.best[game.mode.id][game.difficulty.id], game.score);
     ui.updateHUD({
+      label: friends ? currentPlayer().name.toUpperCase() : 'SCORE',
       score: game.score,
-      best: game.best[game.mode.id],
+      sub: friends ? `ROUND ${Math.floor(game.match.turn / friends.players) + 1} OF ${friends.roundsEach}` : `BEST ${best}`,
+      lifetime: game.lifetime[game.mode.id],
       center: game.mode.timed ? seconds : `RUN ${game.makes}`,
       lowTime: game.mode.timed && seconds <= 10,
       streak: game.streak,
       onFire: isOnFire(),
     });
-    ui.renderTrays(inventory, ball.state !== 'ready');
+    if (game.mode.powerUps) ui.renderTrays(inventory, ball.state !== 'ready');
   }
   ui.setHint(game.state === 'playing' && game.shots === 0 && ball.state === 'ready');
 }
@@ -586,7 +710,8 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
-showMenu();
+applyDifficulty(game.difficulty.id);
+showHome();
 requestAnimationFrame(frame);
 
 // Handy for debugging in the browser console, e.g. ballin.inventory.add('gold', 5)

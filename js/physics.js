@@ -46,13 +46,17 @@ export function computeLaunch(start, target, apexY) {
  * swipe = { dx, dy, speed } where dx/dy is the swipe direction in pixels
  * and speed is measured in screen-heights per second.
  */
-export function aimShot(swipe, ball, hoop) {
+export function aimShot(swipe, ball, hoop, difficulty) {
   const S = CONFIG.shot;
 
   // 1) POWER — how fast the swipe was compared to a "perfect" swipe.
   //    1.0 = lands exactly at the hoop, less = short, more = long.
-  const raw = swipe.speed / S.perfectSwipeSpeed;
-  const power = clamp(1 + (raw - 1) * S.powerForgiveness, S.minPower, S.maxPower);
+  //    On Easy/Normal power doesn't matter: every shot is the right distance.
+  let power = 1;
+  if (difficulty.powerMatters) {
+    const raw = swipe.speed / S.perfectSwipeSpeed;
+    power = clamp(1 + (raw - 1) * S.powerForgiveness, S.minPower, S.maxPower);
+  }
 
   // 2) DIRECTION — extend the swipe line up the screen until it reaches the
   //    rim's height, then ask the camera which world x is at that spot.
@@ -64,7 +68,7 @@ export function aimShot(swipe, ball, hoop) {
 
   // 3) AIM ASSIST — shrink small misses so close swipes feel good.
   const miss = aimX - hoop.x;
-  const help = S.aimAssist * Math.max(0, 1 - Math.abs(miss) / S.aimAssistRange);
+  const help = difficulty.aimAssist * Math.max(0, 1 - Math.abs(miss) / S.aimAssistRange);
   aimX = hoop.x + miss * (1 - help);
 
   // 4) The target is the rim, pulled closer or pushed further by power.
@@ -73,7 +77,7 @@ export function aimShot(swipe, ball, hoop) {
     y: hoop.rimY,
     z: ball.z + (hoop.z - ball.z) * power,
   };
-  const apex = S.apexY + (power - 1) * S.apexPowerGain;
+  const apex = difficulty.apexY + (power - 1) * S.apexPowerGain;
   return computeLaunch(ball, target, apex);
 }
 
@@ -197,8 +201,8 @@ export function stepBall(ball, hoop, dt, events) {
   }
 
   // Back wall
-  if (ball.z + r > CONFIG.court.wallZ) {
-    ball.z = CONFIG.court.wallZ - r;
+  if (ball.z + r > hoop.wallZ) {
+    ball.z = hoop.wallZ - r;
     const hit = bounce(ball, 0, 0, -1, P.wallBounce);
     if (hit > 0.3) events.push({ type: 'wall', speed: hit });
   }

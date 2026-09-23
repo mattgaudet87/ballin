@@ -2,9 +2,10 @@
  * ui.js
  * ---------------------------------------------------------------------------
  * Everything drawn with regular HTML instead of the canvas:
- *   - the start screen (mode picker, missions, locker)
+ *   - menu screens: home, Hot Hand hub (missions + locker), friends setup,
+ *     pass-the-phone handoff, friends results, game over
+ *   - the reward popup
  *   - the in-game HUD, countdown, "swipe up" hint and power-up trays
- *   - the game-over screen (score, stats, mission progress + rewards)
  *   - the mute button
  *
  * The HTML skeleton lives in index.html and the styling in style.css. This
@@ -15,6 +16,17 @@ import { CONFIG } from './config.js';
 import { ITEMS, BALL_IDS, DRINK_IDS } from './items.js';
 
 const $ = (id) => document.getElementById(id);
+const $$ = (selector) => document.querySelectorAll(selector);
+
+/** Menu screens by name (only one is visible at a time). */
+const SCREENS = {
+  home: 'home-screen',
+  hothand: 'hothand-screen',
+  friends: 'friends-screen',
+  handoff: 'handoff-screen',
+  results: 'results-screen',
+  gameover: 'gameover-screen',
+};
 
 /** Small HTML icon for an item (drawn with CSS, see "Item icons" in style.css). */
 export function itemIcon(id) {
@@ -26,25 +38,34 @@ export class UI {
   constructor() {
     this.el = {
       hud: $('hud'),
+      hudLabel: $('hud-label'),
       score: $('score'),
       bestSmall: $('best-small'),
+      lifetimeSmall: $('lifetime-small'),
       timer: $('timer'),
       streak: $('streak'),
       hint: $('hint'),
       countdown: $('countdown'),
-      startScreen: $('start-screen'),
-      startMissions: $('start-missions'),
+      hubMissions: $('hub-missions'),
       locker: $('locker'),
-      gameOver: $('gameover-screen'),
       gameOverTitle: $('gameover-title'),
       finalScore: $('final-score'),
       newBest: $('new-best'),
       statBest: $('stat-best'),
+      statLifetime: $('stat-lifetime'),
       statMakes: $('stat-makes'),
       statAccuracy: $('stat-accuracy'),
       statSwishes: $('stat-swishes'),
       statStreak: $('stat-streak'),
+      gameOverMissionsBlock: $('gameover-missions-block'),
       gameOverMissions: $('gameover-missions'),
+      handoffRound: $('handoff-round'),
+      handoffName: $('handoff-name'),
+      handoffScores: $('handoff-scores'),
+      resultsWinner: $('results-winner'),
+      resultsTable: $('results-table'),
+      rewardPopup: $('reward-popup'),
+      rewardItems: $('reward-items'),
       ballTray: $('ball-tray'),
       drinkTray: $('drink-tray'),
       muteBtn: $('mute-btn'),
@@ -55,19 +76,52 @@ export class UI {
 
   // --- Wiring up buttons ---------------------------------------------------------
 
-  /** callback(modeId) when a mode card on the start screen is tapped. */
+  /** callback(modeId) when a mode card on the home screen is tapped. */
   onModeSelect(callback) {
-    document.querySelectorAll('.mode-card').forEach((card) => {
-      card.addEventListener('click', () => callback(card.dataset.mode));
+    $$('.mode-card').forEach((card) => card.addEventListener('click', () => callback(card.dataset.mode)));
+  }
+
+  /** callback(difficultyId) when any difficulty picker is tapped. */
+  onDifficulty(callback) {
+    $$('[data-difficulty]').forEach((btn) => btn.addEventListener('click', () => callback(btn.dataset.difficulty)));
+  }
+
+  /** Back arrows (on the Hot Hand and friends screens) and "Menu" buttons. */
+  onHome(callback) {
+    $$('[data-back], [data-home], #menu-btn').forEach((btn) => btn.addEventListener('click', callback));
+  }
+
+  onHotHandPlay(callback) {
+    $('hothand-play-btn').addEventListener('click', callback);
+  }
+
+  /** callback([name1, name2]) when the friends match starts. */
+  onFriendsStart(callback) {
+    $('friends-start-btn').addEventListener('click', () => {
+      callback([$('player1-name').value.trim() || 'Player 1', $('player2-name').value.trim() || 'Player 2']);
     });
+  }
+
+  onHandoffReady(callback) {
+    $('handoff-ready-btn').addEventListener('click', callback);
+  }
+
+  onRematch(callback) {
+    $('rematch-btn').addEventListener('click', callback);
   }
 
   onPlayAgain(callback) {
     $('again-btn').addEventListener('click', callback);
   }
 
-  onMenu(callback) {
-    $('menu-btn').addEventListener('click', callback);
+  /** callback(missionIndex) when a "Collect reward" button is tapped. */
+  onCollect(callback) {
+    for (const list of [this.el.hubMissions, this.el.gameOverMissions]) {
+      list.addEventListener('click', (e) => {
+        const button = e.target.closest('[data-collect]');
+        if (button) callback(Number(button.dataset.collect));
+      });
+    }
   }
 
   onMute(callback) {
@@ -89,35 +143,132 @@ export class UI {
     this.el.muteBtn.setAttribute('aria-label', muted ? 'Unmute sound' : 'Mute sound');
   }
 
-  // --- Start screen ----------------------------------------------------------------
+  // --- Screens ---------------------------------------------------------------------
+
+  /** Show one menu screen by name (see SCREENS), or none with null. */
+  showScreen(name) {
+    for (const [key, id] of Object.entries(SCREENS)) {
+      $(id).classList.toggle('hidden', key !== name);
+    }
+    if (name) {
+      $(SCREENS[name]).scrollTop = 0;
+      this.hideGameHUD();
+    }
+  }
+
+  /** Highlight the chosen difficulty in every picker. */
+  setDifficulty(id) {
+    $$('[data-difficulty]').forEach((btn) => btn.classList.toggle('selected', btn.dataset.difficulty === id));
+  }
 
   /**
-   * @param bests     { blitz: 12, hothand: 30 }
-   * @param missions  [{ text, progress, target, reward: [itemIds] }]
-   * @param inventory the Inventory (for the locker)
+   * Fill in best scores and lifetime basket counts wherever they appear.
+   * @param bests     { blitz: 12, hothand: 30 } for the current difficulty
+   * @param lifetime  { blitz: 200, hothand: 90, friends: 40 }
    */
-  showMenu({ bests, missions, inventory }) {
-    for (const el of document.querySelectorAll('[data-best]')) {
-      el.textContent = bests[el.dataset.best] ?? 0;
-    }
-    this.el.startMissions.innerHTML = missions.map((m) => missionCard(m)).join('');
-    this.el.locker.innerHTML = [...BALL_IDS, ...DRINK_IDS].map((id) => lockerTile(id, inventory)).join('');
+  setRecords(bests, lifetime) {
+    $$('[data-best]').forEach((el) => (el.textContent = bests[el.dataset.best] ?? 0));
+    $$('[data-lifetime]').forEach((el) => (el.textContent = lifetime[el.dataset.lifetime] ?? 0));
+  }
 
-    show(this.el.startScreen);
-    this.el.startScreen.scrollTop = 0;
-    hide(this.el.gameOver);
-    this.hideGameHUD();
+  /** Fill the Hot Hand hub's missions and locker. */
+  renderHotHandHub(missions, inventory) {
+    this.el.hubMissions.innerHTML = missions.map((m, i) => missionCard(m, i)).join('');
+    this.el.locker.innerHTML = [...BALL_IDS, ...DRINK_IDS].map((id) => lockerTile(id, inventory)).join('');
+  }
+
+  setPlayerNames(names) {
+    $('player1-name').value = names[0] ?? '';
+    $('player2-name').value = names[1] ?? '';
+  }
+
+  /** Pass-the-phone screen between Blitz with Friends rounds. */
+  showHandoff({ round, totalRounds, name, players }) {
+    this.el.handoffRound.textContent = `ROUND ${round} OF ${totalRounds}`;
+    this.el.handoffName.textContent = name;
+    this.el.handoffScores.innerHTML = scoreboard(players, false);
+    this.showScreen('handoff');
+  }
+
+  /** Final Blitz with Friends results. */
+  showResults({ players }) {
+    const top = Math.max(...players.map((p) => p.total));
+    const winners = players.filter((p) => p.total === top);
+    this.el.resultsWinner.textContent = winners.length > 1 ? 'It’s a tie!' : `${winners[0].name} wins!`;
+    this.el.resultsTable.innerHTML = scoreboard(players, true);
+    this.showScreen('results');
+  }
+
+  /**
+   * @param stats.title     headline, e.g. "TIME'S UP"
+   * @param stats.missions  (Hot Hand only) mission views + results to animate
+   */
+  showGameOver(stats) {
+    const e = this.el;
+    e.gameOverTitle.textContent = stats.title;
+    e.finalScore.textContent = stats.score;
+    e.statBest.textContent = stats.best;
+    e.statLifetime.textContent = stats.lifetime;
+    e.statMakes.textContent = `${stats.makes}/${stats.shots}`;
+    e.statAccuracy.textContent = stats.shots ? `${Math.round((stats.makes / stats.shots) * 100)}%` : '–';
+    e.statSwishes.textContent = stats.swishes;
+    e.statStreak.textContent = stats.bestStreak;
+    e.newBest.classList.toggle('hidden', !stats.isNewBest);
+
+    e.gameOverMissionsBlock.classList.toggle('hidden', !stats.missions);
+    if (stats.missions) {
+      const { views, results } = stats.missions;
+      // Start the bars at their old progress, then fill them up.
+      e.gameOverMissions.innerHTML = views
+        .map((m, i) => missionCard({ ...m, progress: results[i].before, completed: m.completed && !results[i].justCompleted }, i))
+        .join('');
+      setTimeout(() => this.animateMissions(views, results), 350);
+    }
+    this.showScreen('gameover');
+  }
+
+  /** Re-draw the game-over missions without animation (after collecting one). */
+  renderGameOverMissions(views) {
+    this.el.gameOverMissions.innerHTML = views.map((m, i) => missionCard(m, i)).join('');
+  }
+
+  animateMissions(views, results) {
+    this.el.gameOverMissions.querySelectorAll('.mission').forEach((card, i) => {
+      const m = views[i];
+      card.querySelector('.bar-fill').style.width = `${(m.progress / m.target) * 100}%`;
+      card.querySelector('.mission-count').textContent = `${m.progress}/${m.target}`;
+      if (results[i].after > results[i].before) card.classList.add('gained');
+      if (m.completed) card.classList.add('done');
+    });
+  }
+
+  /**
+   * Reveal what a mission gave you. Tapping anywhere closes it and then
+   * calls onClose (which adds the items to the locker).
+   */
+  showRewardPopup(items, onClose) {
+    const popup = this.el.rewardPopup;
+    this.el.rewardItems.innerHTML = items
+      .map((id, i) => `<div class="reward-item" style="animation-delay:${0.15 + i * 0.18}s">${itemIcon(id)}<span>${ITEMS[id].name}</span><small>${ITEMS[id].desc}</small></div>`)
+      .join('');
+    popup.classList.remove('hidden');
+    const close = () => {
+      popup.classList.add('hidden');
+      popup.removeEventListener('click', close);
+      onClose();
+    };
+    // Wait a moment so the tap that opened it doesn't instantly close it
+    setTimeout(() => popup.addEventListener('click', close), 400);
   }
 
   // --- In game -------------------------------------------------------------------
 
-  /** Hide menus and show the in-game HUD. */
-  showGame() {
-    hide(this.el.startScreen);
-    hide(this.el.gameOver);
+  /** Hide menus and show the in-game HUD (and power-up trays if this mode has them). */
+  showGame({ powerUps }) {
+    this.showScreen(null);
     show(this.el.hud);
-    show(this.el.ballTray);
-    show(this.el.drinkTray);
+    this.el.ballTray.classList.toggle('hidden', !powerUps);
+    this.el.drinkTray.classList.toggle('hidden', !powerUps);
     this.shown = {};
   }
 
@@ -146,11 +297,15 @@ export class UI {
 
   /**
    * Called every frame; only updates the page when a value actually changes.
-   * `center` is what shows in the middle pill (seconds left, or the run count).
+   * @param label   small text above the score ("SCORE" or a player's name)
+   * @param sub     line under the score ("BEST 12" or "ROUND 1 OF 2")
+   * @param center  what shows in the middle pill (seconds left, or the run count)
    */
-  updateHUD({ score, best, center, lowTime, streak, onFire }) {
+  updateHUD({ label, score, sub, lifetime, center, lowTime, streak, onFire }) {
+    this.setText('hudLabel', label);
     this.setText('score', score);
-    this.setText('bestSmall', `BEST ${Math.max(best, score)}`);
+    this.setText('bestSmall', sub);
+    this.setText('lifetimeSmall', `🏀 ${lifetime}`);
     this.setText('timer', center);
     this.el.timer.classList.toggle('low', lowTime);
 
@@ -200,41 +355,6 @@ export class UI {
     }).join('');
   }
 
-  // --- Game over -----------------------------------------------------------------
-
-  /**
-   * @param stats.title    headline, e.g. "TIME'S UP"
-   * @param stats.results  mission results from Missions.applyGame()
-   */
-  showGameOver(stats) {
-    const e = this.el;
-    e.gameOverTitle.textContent = stats.title;
-    e.finalScore.textContent = stats.score;
-    e.statBest.textContent = stats.best;
-    e.statMakes.textContent = `${stats.makes}/${stats.shots}`;
-    e.statAccuracy.textContent = stats.shots ? `${Math.round((stats.makes / stats.shots) * 100)}%` : '–';
-    e.statSwishes.textContent = stats.swishes;
-    e.statStreak.textContent = stats.bestStreak;
-    e.newBest.classList.toggle('hidden', !stats.isNewBest);
-
-    // Mission cards start at their old progress, then the bars fill up.
-    e.gameOverMissions.innerHTML = stats.results
-      .map((r) => missionCard({ ...r.mission, text: r.text, progress: r.before }, r))
-      .join('');
-    setTimeout(() => {
-      e.gameOverMissions.querySelectorAll('.mission').forEach((card, i) => {
-        const r = stats.results[i];
-        card.querySelector('.bar-fill').style.width = `${(r.after / r.mission.target) * 100}%`;
-        card.querySelector('.mission-count').textContent = `${r.after}/${r.mission.target}`;
-        if (r.completed) card.classList.add('done');
-      });
-    }, 350);
-
-    this.hideGameHUD();
-    show(e.gameOver);
-    e.gameOver.scrollTop = 0;
-  }
-
   setText(key, value) {
     if (this.shown[key] === value) return;
     this.shown[key] = value;
@@ -245,26 +365,22 @@ export class UI {
 // --- HTML builders -------------------------------------------------------------------
 
 /**
- * A mission card with a progress bar and its reward.
- * If `result` is given (game-over screen), completed missions animate to "done".
+ * A mission card: description, progress bar, and — once complete — a big
+ * green "Collect reward" button. The reward itself stays a surprise.
  */
-function missionCard(mission, result = null) {
+function missionCard(mission, index) {
   const pct = Math.min(100, (mission.progress / mission.target) * 100);
-  const rewards = mission.reward
-    .map((id) => `<span class="chip">${itemIcon(id)}${ITEMS[id].name}</span>`)
-    .join('');
-  const gained = result && result.after > result.before ? ' gained' : '';
-  return `<div class="mission${gained}">
+  return `<div class="mission${mission.completed ? ' done' : ''}">
     <div class="mission-top">
       <span class="mission-text">${mission.text}</span>
       <span class="mission-count">${mission.progress}/${mission.target}</span>
     </div>
     <div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div>
-    <div class="mission-reward"><span class="reward-label">REWARD</span>${rewards}<span class="done-badge">COMPLETE ✓</span></div>
+    <button type="button" class="collect-btn" data-collect="${index}">🎁 COLLECT REWARD</button>
   </div>`;
 }
 
-/** A tile in the start screen's locker showing how many of an item you own. */
+/** A tile in the locker showing how many of an item you own. */
 function lockerTile(id, inventory) {
   const item = ITEMS[id];
   const boost = inventory.active[id];
@@ -276,6 +392,21 @@ function lockerTile(id, inventory) {
     <span class="locker-desc">${item.desc}</span>
     <span class="locker-count">${status}</span>
   </div>`;
+}
+
+/** Blitz with Friends scores. `final` adds the per-round breakdown. */
+function scoreboard(players, final) {
+  return players
+    .map((p) => {
+      const rounds = final ? `<span class="rounds">${p.rounds.map((r) => `<i>${r}</i>`).join('')}</span>` : '';
+      return `<div class="score-row"><span class="who">${escapeHtml(p.name)}</span>${rounds}<b>${p.total}</b></div>`;
+    })
+    .join('');
+}
+
+/** Player names are typed by users, so make sure they can't inject HTML. */
+function escapeHtml(text) {
+  return text.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }
 
 function show(el) {

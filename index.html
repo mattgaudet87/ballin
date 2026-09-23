@@ -5,7 +5,7 @@
   <!-- No zooming, and let the game draw under the iPhone notch -->
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>Ballin'</title>
-  <meta name="description" content="Flick basketball. Swipe up to shoot, 60 seconds on the clock." />
+  <meta name="description" content="Flick basketball. Blitz, Hot Hand and pass-and-play with friends." />
   <meta name="theme-color" content="#070b18" />
 
   <!-- Home-screen app settings (iPhone) -->
@@ -31,9 +31,10 @@
     <!-- In-game HUD -->
     <div id="hud" class="hidden">
       <div class="hud-score">
-        <span class="hud-label">SCORE</span>
+        <span id="hud-label" class="hud-label">SCORE</span>
         <span id="score">0</span>
         <span id="best-small">BEST 0</span>
+        <span id="lifetime-small" class="lifetime-small">🏀 0</span>
       </div>
       <div class="hud-center">
         <span id="timer">60</span>
@@ -61,44 +62,124 @@
 
     <div id="countdown" class="hidden"></div>
 
-    <!-- Start screen: pick a mode, check missions and power-ups -->
-    <section id="start-screen" class="overlay scroll">
+    <!-- Home screen: pick a difficulty and a mode -->
+    <section id="home-screen" class="overlay scroll">
       <div class="panel">
         <h1 class="title">BALLIN'</h1>
         <p class="tagline">Flick to shoot. Aim is everything.</p>
+
+        <div class="difficulty-picker" role="radiogroup" aria-label="Difficulty">
+          <button type="button" data-difficulty="easy">Easy</button>
+          <button type="button" data-difficulty="normal">Normal</button>
+          <button type="button" data-difficulty="hard">Hard</button>
+        </div>
 
         <div class="modes">
           <button class="mode-card" data-mode="blitz" type="button">
             <span class="mode-icon">⏱</span>
             <span class="mode-name">BLITZ</span>
             <span class="mode-desc">60 seconds. Score all you can.</span>
-            <span class="mode-best">BEST <b data-best="blitz">0</b></span>
+            <span class="mode-stats"><span>BEST <b data-best="blitz">0</b></span><span>🏀 <b data-lifetime="blitz">0</b></span></span>
           </button>
           <button class="mode-card hot" data-mode="hothand" type="button">
             <span class="mode-icon">🔥</span>
             <span class="mode-name">HOT HAND</span>
-            <span class="mode-desc">No clock. One miss ends it. Multipliers up to 10×.</span>
-            <span class="mode-best">BEST <b data-best="hothand">0</b></span>
+            <span class="mode-desc">One miss ends it. Multipliers, missions &amp; power-ups.</span>
+            <span class="mode-stats"><span>BEST <b data-best="hothand">0</b></span><span>🏀 <b data-lifetime="hothand">0</b></span></span>
+          </button>
+          <button class="mode-card friends wide" data-mode="friends" type="button">
+            <span class="mode-icon">👥</span>
+            <span class="mode-name">BLITZ WITH FRIENDS</span>
+            <span class="mode-desc">Pass and play. 2 players, 2 rounds each, 30 seconds a round.</span>
+            <span class="mode-stats"><span>🏀 <b data-lifetime="friends">0</b></span></span>
           </button>
         </div>
 
-        <h2 class="section-title">Missions</h2>
-        <div id="start-missions" class="missions"></div>
-
-        <h2 class="section-title">Locker</h2>
-        <div id="locker" class="locker"></div>
-
-        <p class="how">Swipe up on the ball to shoot · Swish = bonus point · 3 in a row = on fire (2×) · Tap power-ups on the sides during a game</p>
+        <p class="how">Swipe up on the ball to shoot · Swish = bonus point · 3 in a row = on fire (2×)</p>
       </div>
     </section>
 
-    <!-- Game over screen -->
+    <!-- Hot Hand hub: play, missions and locker -->
+    <section id="hothand-screen" class="overlay scroll hidden">
+      <div class="panel">
+        <button class="back-btn" type="button" data-back aria-label="Back">‹</button>
+        <h1 class="mode-title hot-text">HOT HAND</h1>
+        <p class="tagline">No clock. One miss and it’s over. Chase 2×, 3×, 5× and 10× baskets.</p>
+
+        <div class="difficulty-picker" role="radiogroup" aria-label="Difficulty">
+          <button type="button" data-difficulty="easy">Easy</button>
+          <button type="button" data-difficulty="normal">Normal</button>
+          <button type="button" data-difficulty="hard">Hard</button>
+        </div>
+
+        <div class="hub-stats">
+          <div><span data-best="hothand">0</span><small>Best</small></div>
+          <div><span data-lifetime="hothand">0</span><small>Lifetime baskets</small></div>
+        </div>
+        <button id="hothand-play-btn" class="big-btn" type="button">PLAY</button>
+
+        <h2 class="section-title">Missions</h2>
+        <div id="hub-missions" class="missions"></div>
+
+        <h2 class="section-title">Locker</h2>
+        <div id="locker" class="locker"></div>
+        <p class="how">Tap power-ups on the sides of the screen during a run.</p>
+      </div>
+    </section>
+
+    <!-- Blitz with Friends: set up the players -->
+    <section id="friends-screen" class="overlay scroll hidden">
+      <div class="panel">
+        <button class="back-btn" type="button" data-back aria-label="Back">‹</button>
+        <h1 class="mode-title friends-text">BLITZ WITH FRIENDS</h1>
+        <p class="tagline">Pass the phone between turns. Each player gets 2 rounds of 30 seconds (A, B, A, B). Highest total wins.</p>
+
+        <div class="name-fields">
+          <label>Player 1<input id="player1-name" type="text" maxlength="12" placeholder="Player 1" autocomplete="off" /></label>
+          <label>Player 2<input id="player2-name" type="text" maxlength="12" placeholder="Player 2" autocomplete="off" /></label>
+        </div>
+
+        <div class="difficulty-picker" role="radiogroup" aria-label="Difficulty">
+          <button type="button" data-difficulty="easy">Easy</button>
+          <button type="button" data-difficulty="normal">Normal</button>
+          <button type="button" data-difficulty="hard">Hard</button>
+        </div>
+
+        <button id="friends-start-btn" class="big-btn" type="button">START MATCH</button>
+      </div>
+    </section>
+
+    <!-- Blitz with Friends: pass the phone between rounds -->
+    <section id="handoff-screen" class="overlay hidden">
+      <div class="panel">
+        <p id="handoff-round" class="eyebrow">ROUND 1 OF 4</p>
+        <p class="handoff-pass">Pass the phone to</p>
+        <div id="handoff-name" class="handoff-name">Player 1</div>
+        <div id="handoff-scores" class="scoreboard"></div>
+        <button id="handoff-ready-btn" class="big-btn" type="button">I’M READY</button>
+      </div>
+    </section>
+
+    <!-- Blitz with Friends: final results -->
+    <section id="results-screen" class="overlay scroll hidden">
+      <div class="panel">
+        <p class="eyebrow">FINAL</p>
+        <div id="results-winner" class="winner">Player 1 wins!</div>
+        <div id="results-table" class="scoreboard big"></div>
+        <div class="btn-row">
+          <button class="ghost-btn" type="button" data-home>MENU</button>
+          <button id="rematch-btn" class="big-btn" type="button">REMATCH</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Game over (Blitz and Hot Hand) -->
     <section id="gameover-screen" class="overlay scroll hidden">
       <div class="panel">
         <p id="gameover-title" class="eyebrow">TIME'S UP</p>
         <div id="final-score" class="final-score">0</div>
         <div id="new-best" class="new-best hidden">NEW BEST!</div>
-        <div class="best-pill">BEST <strong id="stat-best">0</strong></div>
+        <div class="best-pill">BEST <strong id="stat-best">0</strong> · 🏀 <strong id="stat-lifetime">0</strong></div>
         <div class="stats">
           <div><span id="stat-makes">0/0</span><small>Makes</small></div>
           <div><span id="stat-accuracy">–</span><small>Accuracy</small></div>
@@ -106,8 +187,10 @@
           <div><span id="stat-streak">0</span><small>Best streak</small></div>
         </div>
 
-        <h2 class="section-title">Missions</h2>
-        <div id="gameover-missions" class="missions"></div>
+        <div id="gameover-missions-block" class="hidden">
+          <h2 class="section-title">Missions</h2>
+          <div id="gameover-missions" class="missions"></div>
+        </div>
 
         <div class="btn-row">
           <button id="menu-btn" class="ghost-btn" type="button">MENU</button>
@@ -115,6 +198,15 @@
         </div>
       </div>
     </section>
+
+    <!-- Reward reveal popup (tap anywhere to close) -->
+    <div id="reward-popup" class="popup hidden" role="dialog" aria-label="Reward">
+      <div class="popup-card">
+        <p class="eyebrow">MISSION REWARD</p>
+        <div id="reward-items" class="reward-items"></div>
+        <p class="tap-hint">Tap anywhere to add to your locker</p>
+      </div>
+    </div>
   </main>
 
   <!-- type="module" lets our JS files import each other -->

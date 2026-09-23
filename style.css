@@ -462,7 +462,13 @@ body {
   flex: 1;
 }
 
-.mode-best {
+.mode-stats {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.mode-stats > span {
   margin-top: 6px;
   padding: 4px 10px;
   border-radius: 999px;
@@ -498,6 +504,7 @@ body {
 }
 
 .mission-top {
+  transition: opacity 0.3s ease;
   display: flex;
   justify-content: space-between;
   gap: 10px;
@@ -529,82 +536,51 @@ body {
   background: linear-gradient(90deg, #ffb347, #ff6b1a);
 }
 
-.mission-reward {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
+/* A finished mission turns into a green "package" with a big collect button */
+.mission {
+  position: relative;
+  overflow: hidden;
 }
 
-.reward-label {
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0.14em;
-  color: var(--muted);
-}
-
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 9px 3px 4px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.chip .icon-ball {
-  width: 16px;
-  height: 16px;
-}
-
-.chip .icon-can {
-  width: 11px;
-  height: 18px;
-  border-top-width: 2px;
-}
-
-.chip .icon-can::after {
-  top: 4px;
-  height: 8px;
-}
-
-.done-badge {
+.collect-btn {
   display: none;
-  margin-left: auto;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #2fd37a, #7ee8a8);
-  color: #062;
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
 }
 
 .mission.done {
-  background: rgba(47, 211, 122, 0.14);
-  border-color: rgba(47, 211, 122, 0.6);
+  background: repeating-linear-gradient(90deg, transparent 0 46%, rgba(255, 255, 255, 0.18) 46% 54%, transparent 54% 100%),
+    linear-gradient(160deg, #2fd37a, #16a35a);
+  border-color: rgba(126, 232, 168, 0.8);
+  box-shadow: 0 8px 24px rgba(47, 211, 122, 0.35);
 }
 
-.mission.done .bar-fill {
-  background: linear-gradient(90deg, #2fd37a, #7ee8a8);
+.mission.done .mission-top,
+.mission.done .bar {
+  opacity: 0.25;
 }
 
-.mission.done .done-badge {
-  display: inline-block;
-  animation: pop 0.5s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+.mission.done .collect-btn {
+  display: block;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 12px 22px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  color: #0c7a3e;
+  font-family: var(--font);
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+  animation: collect-pulse 1.2s ease-in-out infinite;
 }
 
-.mission.done .chip {
-  background: rgba(255, 210, 63, 0.2);
-  box-shadow: 0 0 12px rgba(255, 210, 63, 0.45);
-  animation: pulse 1.2s ease-in-out infinite;
-}
-
-.mission.done .reward-label::after {
-  content: " EARNED";
-  color: #7ee8a8;
+@keyframes collect-pulse {
+  50% { transform: translate(-50%, -50%) scale(1.07); }
 }
 
 /* Locker (your power-ups, shown on the start screen) */
@@ -773,6 +749,311 @@ body {
 .big-btn:active,
 .ghost-btn:active {
   transform: scale(0.97);
+}
+
+/* --- Difficulty picker, hubs, friends -------------------------------------- */
+
+.difficulty-picker {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  margin: 0 0 16px;
+  padding: 4px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.difficulty-picker button {
+  padding: 10px 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.difficulty-picker button.selected {
+  background: #fff;
+  color: #111a33;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+
+.mode-card.wide {
+  grid-column: 1 / -1;
+}
+
+.mode-card.friends {
+  background: linear-gradient(160deg, #b36bff, #6b2fd6);
+  box-shadow: 0 10px 28px rgba(140, 80, 255, 0.4), inset 0 -4px 0 rgba(0, 0, 0, 0.18);
+}
+
+.back-btn {
+  position: absolute;
+  top: calc(var(--safe-top) + 14px);
+  left: 14px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 30px;
+  line-height: 1;
+  padding-bottom: 4px;
+  cursor: pointer;
+}
+
+.mode-title {
+  margin: 34px 0 0;
+  font-size: 44px;
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.hot-text {
+  background: linear-gradient(180deg, #ffd08a, var(--accent) 60%, #d9420b);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.friends-text {
+  font-size: 34px;
+  background: linear-gradient(180deg, #e2c4ff, #b36bff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.hub-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.hub-stats div {
+  padding: 12px 6px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hub-stats span {
+  font-size: 26px;
+  font-weight: 900;
+}
+
+.hub-stats small {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.lifetime-small {
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.name-fields {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+  text-align: left;
+}
+
+.name-fields label {
+  display: grid;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Text boxes must be selectable/typeable even though the page locks selection */
+.name-fields input {
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-family: var(--font);
+  font-size: 17px; /* 16px+ stops iPhone from zooming in on focus */
+  font-weight: 700;
+  -webkit-user-select: text;
+  user-select: text;
+  touch-action: manipulation;
+}
+
+.name-fields input:focus {
+  outline: 2px solid #b36bff;
+}
+
+.handoff-pass {
+  margin: 30px 0 4px;
+  color: var(--muted);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.handoff-name {
+  margin-bottom: 26px;
+  font-size: 48px;
+  font-weight: 900;
+  line-height: 1.05;
+  word-break: break-word;
+  color: #e2c4ff;
+  animation: pop 0.5s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+.scoreboard {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.score-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  text-align: left;
+}
+
+.score-row .who {
+  flex: 1;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.score-row b {
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.rounds {
+  display: flex;
+  gap: 6px;
+}
+
+.rounds i {
+  min-width: 30px;
+  padding: 3px 6px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  font-style: normal;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
+  color: var(--muted);
+}
+
+.winner {
+  margin: 8px 0 22px;
+  font-size: 42px;
+  font-weight: 900;
+  line-height: 1.1;
+  background: linear-gradient(180deg, #fff4b0, #ffc928);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: pop 0.6s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+/* --- Reward popup ----------------------------------------------------------- */
+
+.popup {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(3, 6, 14, 0.8);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: fade-in 0.25s ease both;
+  cursor: pointer;
+}
+
+.popup-card {
+  width: 100%;
+  max-width: 340px;
+  padding: 26px 20px;
+  border-radius: 26px;
+  background: radial-gradient(circle at 50% 0%, rgba(255, 210, 63, 0.25), transparent 60%), #111a33;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  text-align: center;
+  animation: pop 0.45s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+.reward-items {
+  display: grid;
+  gap: 12px;
+  margin: 18px 0;
+}
+
+.reward-item {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.07);
+  animation: pop 0.5s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+.reward-item .icon-ball {
+  width: 54px;
+  height: 54px;
+}
+
+.reward-item .icon-can {
+  width: 32px;
+  height: 54px;
+  border-top-width: 5px;
+}
+
+.reward-item .icon-can::after {
+  top: 12px;
+  height: 24px;
+}
+
+.reward-item span {
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.reward-item small {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.tap-hint {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--muted);
 }
 
 /* --- Animations ----------------------------------------------------------- */

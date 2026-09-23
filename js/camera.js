@@ -20,14 +20,15 @@ export const camera = {
 };
 
 /**
- * Recalculate the camera for a new screen size. We solve for the zoom and the
- * horizon so that the resting ball and the rim always land on the same
- * fraction of the screen, no matter the device.
+ * Recalculate the camera for a new screen size (or hoop distance). We solve
+ * for the zoom and the horizon so that the resting ball and the rim always
+ * land on the same fraction of the screen, no matter the device. A closer
+ * hoop therefore makes everything look bigger.
  */
-export function fitCamera(width, height) {
+export function fitCamera(width, height, hoopZ) {
   const cam = CONFIG.camera;
   const ballDepth = CONFIG.ball.startZ - camera.z;
-  const rimDepth = CONFIG.hoop.z - camera.z;
+  const rimDepth = hoopZ - camera.z;
 
   // How far below the eye line each object is, per unit of focal length
   const ballDrop = (camera.y - CONFIG.ball.startY) / ballDepth;

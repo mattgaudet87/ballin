@@ -7,13 +7,26 @@ shoot. The ball starts in a different spot every time, so **aim is everything**.
 
 - **Blitz:** 60 seconds on the clock. Score as many points as you can. Hit 10 points and the hoop starts sliding.
 - **Hot Hand:** no clock. Keep shooting until you miss once. Baskets randomly light up with
-  multipliers: **2×** (common), **3×**, **5×** (rare) and **10×** (very rare).
+  multipliers: **2×** (common), **3×**, **5×** (rare) and **10×** (very rare). This is
+  where missions and power-ups live.
+- **Blitz with Friends:** pass and play for 2 players. Each player gets 2 rounds of 30 seconds,
+  alternating A, B, A, B, and the highest total wins.
 
-In both modes a **swish** earns a bonus point and **3 in a row** sets you on fire for double points.
+In every mode a **swish** earns a bonus point and **3 in a row** sets you on fire for double points.
+Each mode tracks your best score (per difficulty) and your lifetime baskets 🏀.
 
-## Missions & power-ups
+## Difficulty
 
-Three missions are always active, and you can see them between games. Finish one to earn power-ups:
+Pick **Easy**, **Normal** or **Hard** on the home screen. It applies to every mode.
+
+- **Hard:** the hoop is far away, and your swipe speed matters a little.
+- **Normal:** the hoop is closer, and every shot flies the right distance. It's all about aim.
+- **Easy:** like Normal, with the hoop twice as close, for a big arcade feel.
+
+## Hot Hand missions & power-ups
+
+Three missions are always active in the Hot Hand screen. You see the goal, but the prize
+is a surprise: finish one, tap **Collect reward**, and find out what you won.
 
 | Power-up | Effect |
 | --- | --- |

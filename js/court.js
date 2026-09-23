@@ -10,9 +10,10 @@
 import { CONFIG } from './config.js';
 import { project } from './camera.js';
 
-export function drawCourt(ctx, width, height) {
-  const wallZ = CONFIG.court.wallZ;
-  const hoopZ = CONFIG.hoop.z;
+/** `hoop` supplies where things are (its distance changes with difficulty). */
+export function drawCourt(ctx, width, height, hoop) {
+  const wallZ = hoop.wallZ;
+  const hoopZ = hoop.baseZ;
 
   // Where the floor meets the back wall on screen
   const floorLine = project(0, 0, wallZ).y;
@@ -55,8 +56,8 @@ export function drawCourt(ctx, width, height) {
   // Baseline along the wall
   line3D(ctx, -6, wallZ, 6, wallZ);
   // Sides of the painted lane
-  line3D(ctx, -0.95, wallZ, -0.95, 1.5);
-  line3D(ctx, 0.95, wallZ, 0.95, 1.5);
+  line3D(ctx, -0.95, wallZ, -0.95, -1);
+  line3D(ctx, 0.95, wallZ, 0.95, -1);
 
   // Small arc under the hoop
   ctx.beginPath();

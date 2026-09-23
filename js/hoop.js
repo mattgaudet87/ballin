@@ -28,15 +28,13 @@ export class Hoop {
   constructor() {
     const H = CONFIG.hoop;
     this.x = 0; // slides left/right when moving
-    this.z = H.z;
     this.rimY = H.rimY;
     this.radius = H.rimRadius;
     this.rimScale = 1; // grows while a White Monster is active
     this.tube = H.rimTube;
     this.netLength = H.netLength;
-
-    this.boardZ = H.z + H.rimRadius + H.boardGap;
     this.boardThickness = 0.05;
+    this.setDistance(3.6, 0.6);
     this.boardWidth = H.boardWidth;
     this.boardBottom = H.rimY - H.boardBelowRim;
     this.boardTop = this.boardBottom + H.boardHeight;
@@ -50,6 +48,19 @@ export class Hoop {
     this.netVelocity = 0;
     this.wobble = 0;
     this.time = 0;
+  }
+
+  /**
+   * Place the hoop `z` meters away (depends on the difficulty) and set how
+   * far it slides when moving.
+   */
+  setDistance(z, slideRange) {
+    const H = CONFIG.hoop;
+    this.baseZ = z; // rim center when the rim is its normal size
+    this.z = z;
+    this.range = slideRange;
+    this.boardZ = z + H.rimRadius + H.boardGap;
+    this.wallZ = this.boardZ + CONFIG.court.wallBehindBoard;
   }
 
   /** Reset position and animations (called at the start of every game). */
@@ -73,7 +84,7 @@ export class Hoop {
 
     if (speed > 0) {
       this.phase += speed * dt;
-      this.x = Math.sin(this.phase) * CONFIG.game.hoopRange;
+      this.x = Math.sin(this.phase) * this.range;
     } else {
       // Glide back to the middle.
       this.phase = 0;
@@ -85,7 +96,7 @@ export class Hoop {
     this.rimScale += (rimScale - this.rimScale) * Math.min(1, dt * 6);
     const H = CONFIG.hoop;
     this.radius = H.rimRadius * this.rimScale;
-    this.z = H.z - (this.radius - H.rimRadius);
+    this.z = this.baseZ - (this.radius - H.rimRadius);
 
     // Spring the net back to its resting length.
     const stiffness = 140;
