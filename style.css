@@ -1006,44 +1006,63 @@ body {
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
 }
 
-/* Home picker: each difficulty shows its court name */
-.difficulty-picker.venues {
-  margin: 18px 0 14px;
+/* Home picker */
+.difficulty-picker.home-picker {
+  margin: 18px 0 8px;
 }
 
-.venues button {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 8px 0 7px;
-}
-
-.venue {
+/* Home court button under the home picker */
+.court-btn {
   display: flex;
   align-items: center;
-  gap: 5px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0;
-  white-space: nowrap;
-  color: rgba(255, 255, 255, 0.45);
+  gap: 8px;
+  width: 100%;
+  margin: 0 0 14px;
+  padding: 9px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font-family: var(--font);
+  cursor: pointer;
 }
 
-.venues button.selected .venue {
-  color: rgba(17, 26, 51, 0.6);
+.court-btn:active {
+  transform: scale(0.98);
 }
 
-.venue-dot {
-  width: 6px;
-  height: 6px;
+.court-btn-label {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.court-btn b {
+  font-family: var(--display);
+  font-style: italic;
+  font-weight: 800;
+  font-size: 19px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.court-btn-change {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--accent-light);
+}
+
+/* Small dot in a court's lane paint color (set from ui.js) */
+.court-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
+  background: var(--dot, #fff);
 }
-
-/* Lane paint colors from court.js COURT_THEMES */
-.venue-dot.easy { background: rgb(52, 120, 220); }
-.venue-dot.normal { background: rgb(200, 40, 40); }
-.venue-dot.hard { background: rgb(130, 70, 220); }
 
 .back-btn {
   position: absolute;
@@ -1849,4 +1868,117 @@ body {
 
 @keyframes fade-in {
   from { opacity: 0; }
+}
+
+/* --------------------------------------------------------------------------
+   Courts screen (pictures drawn by main.js drawCourtPictures)
+   -------------------------------------------------------------------------- */
+
+.court-preview {
+  position: relative;
+}
+
+.court-preview canvas {
+  display: block;
+  width: 100%;
+  height: 230px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 14px 30px -8px rgba(0, 0, 0, 0.6);
+}
+
+.court-preview-label {
+  position: absolute;
+  left: 14px;
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  text-align: left;
+  pointer-events: none;
+}
+
+.court-equipped {
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.court-preview-name {
+  font-family: var(--display);
+  font-size: 34px;
+  font-weight: 800;
+  font-style: italic;
+  line-height: 1;
+  text-transform: uppercase;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+}
+
+#courts-screen .section-title {
+  margin-top: 22px;
+  text-align: left;
+}
+
+.court-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.court-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 5px 5px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+
+.court-tile:active {
+  transform: scale(0.96);
+}
+
+.court-tile.selected {
+  /* 1px thicker border: pull the padding in so the tile doesn't grow */
+  padding: 4px 4px 7px;
+  border: 2px solid #fff;
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 0 18px var(--dot);
+}
+
+.court-tile canvas {
+  display: block;
+  width: 100%;
+  height: 132px;
+  border-radius: 12px;
+}
+
+.court-tile-name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 3px;
+  font-family: var(--display);
+  font-size: 17px;
+  font-weight: 800;
+  font-style: italic;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.court-tile-name .court-dot {
+  width: 6px;
+  height: 6px;
 }

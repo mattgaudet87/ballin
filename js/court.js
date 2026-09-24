@@ -4,15 +4,19 @@
  * Draws the background: a brick back wall, a hardwood floor with painted court
  * lines, and the lighting on top.
  *
- * Each difficulty has its own court (COURT_THEMES) so the three feel different:
+ * The player picks a home court on the Courts screen (COURT_THEMES, in the
+ * order the picker shows them). Until they pick one, each difficulty uses its
+ * classic court:
  *   Easy   = Rec Center  (light brick, maple floor, blue paint)
  *   Normal = Brick Gym   (red brick, warm floor, red paint)
  *   Hard   = Night Court (dark brick, dark floor, purple paint, spotlight)
+ * A theme can also recolor the hoop (`hoop`, see hoop.js), the drifting dust
+ * (`mote`, see effects.js drawMotes) and the FX color grade (`grade`).
  *
  * The background never changes during play, so main.js draws it ONCE into a
- * hidden canvas whenever the screen size or difficulty changes, then copies
- * that image every frame. That's why we can afford thousands of bricks and
- * planks here.
+ * hidden canvas whenever the screen size, difficulty or court changes, then
+ * copies that image every frame. That's why we can afford thousands of bricks
+ * and planks here.
  *
  * Everything is placed in 3D world meters (see camera.js), so the floor lines
  * shrink toward the wall with real perspective.
@@ -21,7 +25,94 @@ import { CONFIG, FX } from './config.js';
 import { camera, project } from './camera.js';
 
 export const COURT_THEMES = {
+  heatwave: {
+    name: 'Heat Wave',
+    mote: '255, 220, 200', // "r, g, b" of the floating dust (effects.js)
+    brick: [222, 118, 92],
+    mortar: '#f1c7b2',
+    wallPad: '#0c6a70',
+    wood: [232, 186, 138],
+    paint: 'rgba(0, 168, 170, 0.55)',
+    lines: 'rgba(255, 255, 255, 0.92)',
+    light: 'rgba(255, 190, 150, 0.36)',
+    shade: 0.28,
+    // Hoop colors that replace the defaults in hoop.js
+    hoop: { rim: '#ff4f6d', rimDark: '#9a1c35', rimHi: 'rgba(255, 190, 200, 0.9)', boardTrim: '#0c9aa0', boardPad: '#0c6a70' },
+    grade: ['rgba(255, 70, 130, 0.45)', 'rgba(255, 170, 60, 0.42)'], // FX color grade: [top, bottom]
+  },
+  goldrush: {
+    name: 'Gold Rush',
+    mote: '255, 225, 150',
+    brick: [88, 52, 124],
+    mortar: '#39234f',
+    wallPad: '#d9a200',
+    wood: [214, 162, 98],
+    paint: 'rgba(250, 186, 20, 0.58)',
+    lines: 'rgba(255, 255, 255, 0.9)',
+    light: 'rgba(255, 214, 120, 0.36)',
+    shade: 0.55,
+    hoop: { rim: '#f7b500', rimDark: '#7f5200', rimHi: 'rgba(255, 238, 170, 0.9)', boardTrim: '#5a2d91', boardPad: '#3b1f63' },
+    grade: ['rgba(110, 50, 200, 0.55)', 'rgba(255, 170, 40, 0.4)'],
+  },
+  evergreen: {
+    name: 'Evergreen',
+    mote: '230, 255, 220',
+    brick: [60, 104, 74],
+    mortar: '#22382a',
+    wallPad: '#0e2a1a',
+    wood: [206, 150, 96],
+    paint: 'rgba(18, 150, 80, 0.58)',
+    lines: 'rgba(255, 255, 255, 0.88)',
+    light: 'rgba(220, 255, 210, 0.3)',
+    shade: 0.5,
+    hoop: { boardTrim: '#138a4a', boardPad: '#0e2a1a' },
+    grade: ['rgba(20, 110, 70, 0.5)', 'rgba(255, 150, 60, 0.36)'],
+  },
+  icebox: {
+    name: 'Ice Box',
+    mote: '210, 235, 255',
+    brick: [192, 212, 232],
+    mortar: '#eef4fa',
+    wallPad: '#0b2a55',
+    wood: [232, 216, 192],
+    paint: 'rgba(60, 170, 255, 0.5)',
+    lines: 'rgba(255, 255, 255, 0.95)',
+    light: 'rgba(200, 235, 255, 0.42)',
+    shade: 0.22,
+    hoop: { rim: '#3fb6ff', rimDark: '#0b4f8a', rimHi: 'rgba(210, 240, 255, 0.95)', boardTrim: '#1f6fd1', boardPad: '#0b2a55' },
+    grade: ['rgba(60, 140, 255, 0.5)', 'rgba(150, 210, 255, 0.32)'],
+  },
+  inferno: {
+    name: 'Inferno',
+    mote: '255, 150, 60',
+    brick: [46, 40, 42],
+    mortar: '#141214',
+    wallPad: '#a8100d',
+    wood: [98, 62, 46],
+    paint: 'rgba(232, 40, 20, 0.6)',
+    lines: 'rgba(255, 150, 90, 0.9)',
+    light: 'rgba(255, 90, 40, 0.38)',
+    shade: 0.7,
+    hoop: { rim: '#ff3a1a', rimDark: '#6e0d02', boardTrim: '#e02010', boardPad: '#141214' },
+    grade: ['rgba(180, 20, 10, 0.5)', 'rgba(255, 110, 30, 0.45)'],
+  },
+  sweetswish: {
+    name: 'Sweet Swish',
+    mote: '255, 205, 232',
+    brick: [238, 168, 196],
+    mortar: '#fde4ee',
+    wallPad: '#c2327a',
+    wood: [244, 208, 198],
+    paint: 'rgba(255, 88, 170, 0.5)',
+    lines: 'rgba(255, 255, 255, 0.95)',
+    light: 'rgba(255, 205, 235, 0.46)',
+    shade: 0.16,
+    hoop: { rim: '#ff5fa8', rimDark: '#a3246a', rimHi: 'rgba(255, 215, 238, 0.95)', boardTrim: '#ff5fa8', boardPad: '#c2327a' },
+    grade: ['rgba(210, 120, 255, 0.45)', 'rgba(255, 140, 190, 0.42)'],
+  },
+  // The three classics: each difficulty's court until the player picks one
   easy: {
+    name: 'Rec Center',
     brick: [214, 178, 140], // RGB of an average brick
     mortar: '#e9dcc8',
     wallPad: '#2c5aa0', // padding along the bottom of the wall
@@ -32,6 +123,7 @@ export const COURT_THEMES = {
     shade: 0.25, // how dark the top of the wall gets (0–1)
   },
   normal: {
+    name: 'Brick Gym',
     brick: [168, 70, 48],
     mortar: '#c9a58f',
     wallPad: '#1d2340',
@@ -42,6 +134,7 @@ export const COURT_THEMES = {
     shade: 0.4,
   },
   hard: {
+    name: 'Night Court',
     brick: [70, 64, 78],
     mortar: '#2a2733',
     wallPad: '#16121f',
@@ -53,6 +146,25 @@ export const COURT_THEMES = {
   },
 };
 
+// Used when a theme doesn't set its own
+const DEFAULT_MOTE = '255, 240, 220';
+const DEFAULT_GRADE = ['rgba(30, 70, 140, 0.55)', 'rgba(255, 130, 50, 0.4)'];
+
+/** The theme for a court id (unknown ids fall back to Brick Gym). */
+export function courtTheme(courtId) {
+  return COURT_THEMES[courtId] ?? COURT_THEMES.normal;
+}
+
+/** "r, g, b" of a court's floating dust, for effects.drawMotes(). */
+export function courtMote(courtId) {
+  return courtTheme(courtId).mote ?? DEFAULT_MOTE;
+}
+
+/** A court's lane paint without its transparency, e.g. for the dot next to its name. */
+export function courtColor(courtId) {
+  return courtTheme(courtId).paint.replace('rgba', 'rgb').replace(/,\s*[\d.]+\)$/, ')');
+}
+
 // Sizes in meters
 const BRICK_W = 0.26;
 const BRICK_H = 0.085;
@@ -63,8 +175,10 @@ const LANE_HALF_WIDTH = 0.9;
 const FREE_THROW_Z = 0.25; // just in front of the resting ball
 
 /** `hoop` supplies where things are (its distance changes with difficulty). */
-export function drawCourt(ctx, width, height, hoop, difficultyId = 'normal') {
-  const theme = COURT_THEMES[difficultyId] ?? COURT_THEMES.normal;
+export function drawCourt(ctx, width, height, hoop, courtId = 'normal') {
+  // A hidden page can report a 0 size: bricks would be 0 px tall and the wall loop would never end
+  if (!(width > 0 && height > 0)) return;
+  const theme = courtTheme(courtId);
   const random = seededRandom(7); // same "random" bricks every time we redraw
   const floorLine = project(0, 0, hoop.wallZ).y;
 
@@ -301,7 +415,7 @@ function drawLighting(ctx, width, height, floorLine, hoop, theme) {
   vignette.addColorStop(1, 'rgba(0, 0, 0, 0.5)');
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, width, height);
-  if (FX) colorGrade(ctx, width, height);
+  if (FX) colorGrade(ctx, width, height, theme);
 }
 
 // ---------------------------------------------------------------------------
@@ -376,14 +490,15 @@ function drawLightCones(ctx, width, height, floorLine, theme) {
   ctx.restore();
 }
 
-/** Cinematic grade: cool shadows up top, warm floor, heavy vignette. */
-function colorGrade(ctx, width, height) {
+/** Cinematic grade: cool shadows up top, warm floor (or the theme's own colors), heavy vignette. */
+function colorGrade(ctx, width, height, theme) {
+  const [top, bottom] = theme.grade ?? DEFAULT_GRADE;
   ctx.save();
   ctx.globalCompositeOperation = 'soft-light';
   const grade = ctx.createLinearGradient(0, 0, 0, height);
-  grade.addColorStop(0, 'rgba(30, 70, 140, 0.55)');
+  grade.addColorStop(0, top);
   grade.addColorStop(0.5, 'rgba(0, 0, 0, 0)');
-  grade.addColorStop(1, 'rgba(255, 130, 50, 0.4)');
+  grade.addColorStop(1, bottom);
   ctx.fillStyle = grade;
   ctx.fillRect(0, 0, width, height);
   ctx.restore();

@@ -124,11 +124,13 @@ export const CONFIG = {
   },
 
   maxPixelRatio: 3, // cap for Retina rendering (higher = sharper but slower)
+  courtPreviewPixelRatio: 2, // same, for the court pictures on the Courts screen
 
   storageKeys: {
     best: 'ballin.best.', // + mode + '.' + difficulty, e.g. 'ballin.best.blitz.hard'
     baskets: 'ballin.baskets.', // + mode + '.' + difficulty: lifetime baskets made
     difficulty: 'ballin.difficulty',
+    court: 'ballin.court', // home court from the Courts screen (unset = each difficulty's classic)
     playerNames: 'ballin.playerNames',
     friendsTab: 'ballin.friendsTab', // last Blitz with Friends tab: 'local' | 'online'
     oldBest: 'ballin.bestScore', // from the very first version (Blitz on Hard)

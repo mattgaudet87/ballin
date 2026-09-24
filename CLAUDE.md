@@ -55,11 +55,12 @@ js/
   main.js      Entry point: setup, screens/menus flow, friends match, game-state machine, main loop, scoring rules, power-ups, render order
   physics.js   aimShot() swipe → launch velocity; stepBall() gravity, rim/board/floor/wall collisions, score detection
   ball.js      Ball state (position, velocity, per-shot flags) and drawing (shading, spinning 3D seams, Shop style colors)
-  hoop.js      Hoop state, side-to-side movement, rim size (White Monster), net spring, multiplier badge, coin, drawing (back/front layers)
-  court.js     Background: brick wall, hardwood floor, court lines, lighting. COURT_THEMES has one look per
-               difficulty. Drawn once into a cached canvas on resize / difficulty change
+  hoop.js      Hoop state, side-to-side movement, rim size (White Monster), net spring, multiplier badge, coin, drawing (back/front layers).
+               Colors can be themed per court (setColors)
+  court.js     Background: brick wall, hardwood floor, court lines, lighting. COURT_THEMES = the 9 pickable courts
+               (6 new + the 3 classics easy/normal/hard). Drawn once into a cached canvas on resize / difficulty / court change
   input.js     Pointer events (touch + mouse) → swipe { dx, dy, speed } → onShoot callback
-  ui.js        HTML overlays: home, Shop, Hot Hand hub (missions + locker), Blitz with Friends (Pass and play / Online tabs),
+  ui.js        HTML overlays: home, Shop, Courts picker, Hot Hand hub (missions + locker), Blitz with Friends (Pass and play / Online tabs),
                friend page, handoff/results, game over, reward popup, HUD, trays
   audio.js     Web Audio sound effects (synthesized, no files) + mute (saved to localStorage)
   effects.js   Particles, fire trail, floating text, screen shake, on-fire edge glow (screen space)
@@ -154,6 +155,12 @@ js/
   (balance = earned + bonus − spent). The home screen's coin button opens the **Shop** (`showShop()`), which
   sells ball styles (`BALL_STYLES`): cosmetic, used in every mode (`ball.style`). A loaded Gold/Silver/Bronze
   ball still shows its own colors.
+- **Courts** (court.js + `showCourts()`/`pickCourt()` in main.js): the home screen's Court button opens the
+  **Courts** screen (a big preview + a tile per court, drawn by `drawCourtPictures()` with a still `previewHoop`,
+  borrowing the shared camera and fitting it back after). The picked court (`game.court`, saved in `ballin.court`)
+  replaces the difficulty's court in every mode. Unset = each difficulty's classic (`courtId()` falls back to the
+  difficulty id). A theme can also set `hoop` colors (`hoop.setColors()`), `mote` (dust tint in `drawMotes`) and
+  `grade` (FX color grade). `redrawCourt()` redraws the cached background and hoop colors after any change.
 - **Scoring** (`onMake()` in main.js): (1 + swish bonus) × fire 2× × basket multiplier ×
   specialty ball × Green Monster multiplier, rounded. Each extra multiplier shows as a label under "+N".
 - **Lockers are per difficulty:** `Inventory` keeps `lockers.easy/normal/hard`, and
@@ -247,6 +254,8 @@ js/
 - **New ball style for the Shop:** add it to `BALL_STYLES` in wallet.js (name, price, colors, seam,
   optional `glow`). The Shop card and in-game drawing pick it up automatically.
 - **Coin odds/values:** `CONFIG.coins` in config.js.
+- **New court:** add an entry (with a `name`) to `COURT_THEMES` in court.js. Key order = picker order. The
+  Courts tile, dot color (from `paint`) and in-game look pick it up automatically.
 - **New mission type:** add a template to `TEMPLATES` in missions.js. If it needs a new stat, count it
   on `game` in main.js (reset it in `startGame()`) and add it to `gameStats()`.
 - **New overlay/HUD item:** markup in index.html, styles in style.css, and a method in ui.js

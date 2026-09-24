@@ -226,12 +226,15 @@ export class Effects {
     ctx.globalAlpha = 1;
   }
 
-  /** FX: dust and big out-of-focus bokeh drifting through the lights. On fire it turns to embers. */
-  drawMotes(ctx, width, height, time, onFire = false) {
+  /**
+   * FX: dust and big out-of-focus bokeh drifting through the lights. On fire it turns to embers.
+   * `idleTint` is the dust's "r, g, b" (each court has its own, see court.js courtMote()).
+   */
+  drawMotes(ctx, width, height, time, onFire = false, idleTint = '255, 240, 220') {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     const speed = onFire ? 0.09 : 0.022;
-    const tint = onFire ? '255, 150, 60' : '255, 240, 220';
+    const tint = onFire ? '255, 150, 60' : idleTint;
     for (let i = 0; i < 70; i++) {
       const cycle = (time * speed * (0.7 + (i % 5) * 0.12) + ((i * 0.37) % 1)) % 1;
       const x = ((i * 0.618034) % 1) * width + Math.sin(time * 0.4 + i * 1.7) * 18;

@@ -89,12 +89,19 @@
           </div>
         </header>
 
-        <!-- Each difficulty is a venue: the dot is that court's lane paint (court.js COURT_THEMES) -->
-        <div class="difficulty-picker venues" role="radiogroup" aria-label="Difficulty">
-          <button type="button" data-difficulty="easy">Easy<span class="venue"><i class="venue-dot easy"></i>Rec Center</span></button>
-          <button type="button" data-difficulty="normal">Normal<span class="venue"><i class="venue-dot normal"></i>Brick Gym</span></button>
-          <button type="button" data-difficulty="hard">Hard<span class="venue"><i class="venue-dot hard"></i>Night Court</span></button>
+        <div class="difficulty-picker home-picker" role="radiogroup" aria-label="Difficulty">
+          <button type="button" data-difficulty="easy">Easy</button>
+          <button type="button" data-difficulty="normal">Normal</button>
+          <button type="button" data-difficulty="hard">Hard</button>
         </div>
+
+        <!-- Home court: the dot is its lane paint color (court.js COURT_THEMES) -->
+        <button id="courts-btn" class="court-btn" type="button">
+          <span class="court-btn-label">Court</span>
+          <i id="court-dot" class="court-dot" aria-hidden="true"></i>
+          <b id="court-name">Brick Gym</b>
+          <span class="court-btn-change">Change ›</span>
+        </button>
 
         <div class="modes">
           <!-- Blitz is the full-width hero; Hot Hand + Free Throw pair up; Friends is a wide strip -->
@@ -169,6 +176,24 @@
         <h2 class="section-title">Ball styles</h2>
         <div id="shop-list" class="shop-list"></div>
         <p class="how">Styles change how your ball looks in every mode. Tap one you own to use it. A Blue Monster (Hot Hand) makes coins worth 2×.</p>
+      </div>
+    </section>
+
+    <!-- Courts: pick the home court every mode plays on -->
+    <section id="courts-screen" class="overlay scroll hidden">
+      <div class="panel">
+        <button class="back-btn" type="button" data-back aria-label="Back">‹</button>
+        <h1 class="mode-title hot-text">COURTS</h1>
+        <p class="tagline">Pick your home court. Every mode plays on it.</p>
+        <div class="court-preview">
+          <canvas id="court-preview" aria-hidden="true"></canvas>
+          <div class="court-preview-label">
+            <span class="court-equipped">Equipped</span>
+            <span id="court-preview-name" class="court-preview-name"></span>
+          </div>
+        </div>
+        <h2 class="section-title">All courts</h2>
+        <div id="court-list" class="court-list" role="radiogroup" aria-label="Courts"></div>
       </div>
     </section>
 

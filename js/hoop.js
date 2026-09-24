@@ -17,13 +17,16 @@ const NET_STRANDS = 12; // strings around the rim
 const NET_ROWS = 4; // diamond rows from top to bottom
 const RIM_SEGMENTS = 40;
 
+// Default colors. A court theme can replace some of them (setColors, court.js `hoop`).
 const COLORS = {
   rim: '#ff5a1f',
   rimDark: '#9e2c08',
+  rimHi: 'rgba(255, 196, 150, 0.9)', // FX shine along the top of the rim
   net: 'rgba(255, 255, 255, 0.9)',
   board: '#f7f7f5', // solid white backboard
   boardShade: '#d9dbe0', // bottom of the board, a little darker
   boardTrim: '#c8261e', // red border and shooter's square
+  boardPad: '#1d2340', // FX padding along the bottom of the board
   boardEdge: '#9aa0ab',
   poleLight: '#f2f4f8',
   poleDark: '#9da4b2',
@@ -53,6 +56,13 @@ export class Hoop {
     this.netVelocity = 0;
     this.wobble = 0;
     this.time = 0;
+
+    this.colors = COLORS;
+  }
+
+  /** Use a court theme's hoop colors (any it leaves out stay the default). */
+  setColors(overrides = {}) {
+    this.colors = { ...COLORS, ...overrides };
   }
 
   /**
@@ -239,9 +249,9 @@ export class Hoop {
 
     // Round-looking pole: light in the middle, darker at the edges
     const shine = ctx.createLinearGradient(bottom.x - w / 2, 0, bottom.x + w / 2, 0);
-    shine.addColorStop(0, COLORS.poleDark);
-    shine.addColorStop(0.4, COLORS.poleLight);
-    shine.addColorStop(1, COLORS.poleDark);
+    shine.addColorStop(0, this.colors.poleDark);
+    shine.addColorStop(0.4, this.colors.poleLight);
+    shine.addColorStop(1, this.colors.poleDark);
     ctx.fillStyle = shine;
     ctx.fillRect(bottom.x - w / 2, top.y, w, bottom.y - top.y);
   }
@@ -262,19 +272,19 @@ export class Hoop {
     ctx.shadowBlur = 0.12 * s;
     ctx.shadowOffsetY = 0.03 * s;
     const face = ctx.createLinearGradient(0, tl.y, 0, br.y);
-    face.addColorStop(0, COLORS.board);
-    face.addColorStop(1, COLORS.boardShade);
+    face.addColorStop(0, this.colors.board);
+    face.addColorStop(1, this.colors.boardShade);
     ctx.fillStyle = face;
     roundRect(ctx, tl.x, tl.y, w, h, corner);
     ctx.fill();
     ctx.restore();
-    ctx.strokeStyle = COLORS.boardEdge;
+    ctx.strokeStyle = this.colors.boardEdge;
     ctx.lineWidth = Math.max(1.5, 0.015 * s);
     ctx.stroke();
 
     // Red border just inside the edge
     const inset = 0.05 * s;
-    ctx.strokeStyle = COLORS.boardTrim;
+    ctx.strokeStyle = this.colors.boardTrim;
     ctx.lineWidth = Math.max(2, 0.03 * s);
     roundRect(ctx, tl.x + inset, tl.y + inset, w - inset * 2, h - inset * 2, corner * 0.6);
     ctx.stroke();
@@ -299,7 +309,7 @@ export class Hoop {
       ctx.restore();
       // Padding along the bottom edge of the board
       const padH = Math.max(3, 0.04 * s);
-      ctx.fillStyle = '#1d2340';
+      ctx.fillStyle = this.colors.boardPad;
       roundRect(ctx, tl.x, br.y - padH * 0.5, w, padH, padH / 2);
       ctx.fill();
     }
@@ -309,7 +319,7 @@ export class Hoop {
   drawBracket(ctx) {
     const a = projectHoop(this.x, this.rimY, this.z + this.radius);
     const b = projectHoop(this.x, this.rimY, this.boardZ);
-    ctx.strokeStyle = COLORS.rimDark;
+    ctx.strokeStyle = this.colors.rimDark;
     ctx.lineWidth = Math.max(2, 0.07 * a.scale);
     ctx.lineCap = 'butt';
     ctx.beginPath();
@@ -336,17 +346,17 @@ export class Hoop {
     trace();
     ctx.lineCap = 'round';
     // Dark outline first, then the bright rim on top
-    ctx.strokeStyle = COLORS.rimDark;
+    ctx.strokeStyle = this.colors.rimDark;
     ctx.lineWidth = width + 2;
     ctx.stroke();
-    ctx.strokeStyle = COLORS.rim;
+    ctx.strokeStyle = this.colors.rim;
     ctx.lineWidth = width;
     ctx.stroke();
 
     if (FX) {
       // Specular highlight along the top of the metal tube
       trace(-width * 0.28);
-      ctx.strokeStyle = 'rgba(255, 196, 150, 0.9)';
+      ctx.strokeStyle = this.colors.rimHi;
       ctx.lineWidth = width * 0.32;
       ctx.stroke();
     }
@@ -371,7 +381,7 @@ export class Hoop {
     const wantBack = half === 'back';
     const center = projectHoop(this.x, this.rimY, this.z);
     // FX: far strands are dimmer so the net reads as 3D
-    ctx.strokeStyle = FX && wantBack ? 'rgba(255, 255, 255, 0.5)' : COLORS.net;
+    ctx.strokeStyle = FX && wantBack ? 'rgba(255, 255, 255, 0.5)' : this.colors.net;
     ctx.lineWidth = Math.max(1, (FX ? 0.013 : 0.011) * center.scale);
     ctx.lineCap = 'round';
     ctx.beginPath();

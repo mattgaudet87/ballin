@@ -2,7 +2,7 @@
  * ui.js
  * ---------------------------------------------------------------------------
  * Everything drawn with regular HTML instead of the canvas:
- *   - menu screens: home, Shop (ball styles), Hot Hand hub (missions + locker), Blitz with
+ *   - menu screens: home, Shop (ball styles), Courts (home court picker), Hot Hand hub (missions + locker), Blitz with
  *     Friends (pass-and-play names, or online: login, challenges, friends),
  *     a friend's page, pass-the-phone handoff, friends results, game over
  *   - the reward popup
@@ -16,6 +16,7 @@
 import { CONFIG } from './config.js';
 import { ITEMS, BALL_IDS, DRINK_IDS } from './items.js';
 import { BALL_STYLES, STYLE_IDS } from './wallet.js';
+import { COURT_THEMES, courtColor } from './court.js';
 
 const $ = (id) => document.getElementById(id);
 const $$ = (selector) => document.querySelectorAll(selector);
@@ -24,6 +25,7 @@ const $$ = (selector) => document.querySelectorAll(selector);
 const SCREENS = {
   home: 'home-screen',
   shop: 'shop-screen',
+  courts: 'courts-screen',
   hothand: 'hothand-screen',
   friends: 'friends-screen',
   friend: 'friend-screen',
@@ -51,6 +53,11 @@ export class UI {
       shopCoins: $('shop-coins'),
       shopList: $('shop-list'),
       shopNote: $('shop-note'),
+      courtName: $('court-name'),
+      courtDot: $('court-dot'),
+      courtPreview: $('court-preview'),
+      courtPreviewName: $('court-preview-name'),
+      courtList: $('court-list'),
       statCoinsWrap: $('stat-coins-wrap'),
       statCoins: $('stat-coins'),
       timer: $('timer'),
@@ -133,6 +140,19 @@ export class UI {
     this.el.shopList.addEventListener('click', (e) => {
       const button = e.target.closest('[data-style]');
       if (button) callback(button.dataset.style);
+    });
+  }
+
+  /** The home court button on the home screen. */
+  onCourts(callback) {
+    $('courts-btn').addEventListener('click', callback);
+  }
+
+  /** callback(courtId) when a court tile on the Courts screen is tapped. */
+  onCourtPick(callback) {
+    this.el.courtList.addEventListener('click', (e) => {
+      const button = e.target.closest('[data-court]');
+      if (button) callback(button.dataset.court);
     });
   }
 
@@ -325,6 +345,35 @@ export class UI {
     this.el.shopCoins.textContent = wallet.balance.toLocaleString();
     showMessage(this.el.shopNote, note);
     this.el.shopList.innerHTML = STYLE_IDS.map((id) => shopCard(id, wallet)).join('');
+  }
+
+  /** Show the home court's name and lane color on the home screen button. */
+  setCourt(id) {
+    this.setText('courtName', COURT_THEMES[id].name);
+    this.el.courtDot.style.background = courtColor(id);
+  }
+
+  /**
+   * Fill the Courts screen: a tile for every court (built once) with `selectedId`
+   * highlighted, and the big preview set to it. main.js then draws the pictures
+   * into the canvases from courtCanvases().
+   */
+  renderCourts(selectedId) {
+    if (!this.el.courtList.children.length) {
+      this.el.courtList.innerHTML = Object.keys(COURT_THEMES).map(courtTile).join('');
+    }
+    for (const tile of this.el.courtList.children) {
+      const on = tile.dataset.court === selectedId;
+      tile.classList.toggle('selected', on);
+      tile.setAttribute('aria-checked', on);
+    }
+    this.el.courtPreview.dataset.court = selectedId;
+    this.el.courtPreviewName.textContent = COURT_THEMES[selectedId].name;
+  }
+
+  /** The Courts screen canvases to draw (each has data-court). Only the big preview if `previewOnly`. */
+  courtCanvases(previewOnly = false) {
+    return previewOnly ? [this.el.courtPreview] : [this.el.courtPreview, ...this.el.courtList.querySelectorAll('canvas')];
   }
 
   /** Fill the Hot Hand hub's missions and locker. */
@@ -633,6 +682,15 @@ function missionCard(mission, index) {
 }
 
 /** A ball style in the Shop: a preview ball, its name, and the price or whether it's yours. */
+/** One tile on the Courts screen: a picture of the court (drawn by main.js) and its name. */
+function courtTile(id) {
+  const color = courtColor(id);
+  return `<button class="court-tile" type="button" role="radio" data-court="${id}" style="--dot: ${color}">
+    <canvas data-court="${id}" aria-hidden="true"></canvas>
+    <span class="court-tile-name"><i class="court-dot"></i>${COURT_THEMES[id].name}</span>
+  </button>`;
+}
+
 function shopCard(id, wallet) {
   const style = BALL_STYLES[id];
   const owned = wallet.owns(id);

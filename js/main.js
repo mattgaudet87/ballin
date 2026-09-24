@@ -10,6 +10,8 @@
  *   5. runs the online screens (login, friends, challenges) using online.js
  *   6. coins: a coin can float in the hoop before any shot; make it to grab
  *      it. Coins buy ball styles in the Shop (wallet.js)
+ *   7. the Courts screen: the picked home court replaces each difficulty's
+ *      classic court in every mode (court.js COURT_THEMES)
  *
  * The other modules each do one job and main.js wires them together.
  * Mode rules live in modes.js, power-ups in items.js, missions in missions.js,
@@ -24,7 +26,7 @@ import { SwipeInput } from './input.js';
 import { UI } from './ui.js';
 import { SoundFX } from './audio.js';
 import { Effects } from './effects.js';
-import { drawCourt } from './court.js';
+import { drawCourt, courtTheme, courtMote, COURT_THEMES } from './court.js';
 import { loadNumber, saveNumber, loadJSON, saveJSON } from './storage.js';
 import { MODES, DIFFICULTIES, rollBasketMultiplier } from './modes.js';
 import { Inventory, ITEMS, DRINK_EFFECTS } from './items.js';
@@ -58,6 +60,7 @@ const view = { width: 0, height: 0, dpr: 1 };
 let ball = new Ball();
 const flying = [];
 const hoop = new Hoop();
+const previewHoop = new Hoop(); // a still hoop for the Courts screen's pictures
 const effects = new Effects();
 const audio = new SoundFX();
 const ui = new UI();
@@ -74,6 +77,8 @@ const game = {
   state: 'menu', // 'menu' | 'waiting' | 'playing' | 'gameover'
   mode: MODES.blitz,
   difficulty: DIFFICULTIES[loadJSON(KEYS.difficulty, 'normal')] ?? DIFFICULTIES.normal,
+  // Home court picked on the Courts screen. null = the difficulty's classic court (see courtId())
+  court: COURT_THEMES[loadJSON(KEYS.court, null)] ? loadJSON(KEYS.court, null) : null,
   best: loadBests(), // best[modeId][difficultyId]
   lifetime: loadLifetime(), // lifetime[modeId][difficultyId] = baskets made ever
   match: null, // Blitz with Friends: { players: [{ name, rounds, total }], turn }
@@ -182,11 +187,22 @@ function resize() {
     c.width = Math.round(view.width * view.dpr);
     c.height = Math.round(view.height * view.dpr);
   }
-  fitCamera(view.width, view.height, hoop.baseZ);
+  redrawCourt();
+  if (ui.isShowing('courts')) drawCourtPictures(); // they're sized to the screen too
+}
 
-  // Redraw the cached background at the new size (each difficulty has its own court)
+/** The court we play on: the one picked on the Courts screen, or the difficulty's classic. */
+function courtId() {
+  return game.court ?? game.difficulty.id;
+}
+
+/** Redraw the cached background (after a new screen size, difficulty or court). */
+function redrawCourt() {
+  fitCamera(view.width, view.height, hoop.baseZ);
   courtCtx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
-  drawCourt(courtCtx, view.width, view.height, hoop, game.difficulty.id);
+  drawCourt(courtCtx, view.width, view.height, hoop, courtId());
+  hoop.setColors(courtTheme(courtId()).hoop);
+  ui.setCourt(courtId());
 }
 
 /** Switch difficulty: moves the hoop, refits the camera and redraws the court. */
@@ -201,6 +217,52 @@ function applyDifficulty(id) {
   ui.setLockerTitle(game.difficulty.name);
   if (ui.isShowing('hothand')) ui.renderHotHandHub(missionViews(), inventory);
   if (ui.isShowing('friend')) showFriend(friendPage.username); // their bests too
+}
+
+// --- Courts ------------------------------------------------------------------
+
+function showCourts() {
+  game.state = 'menu';
+  newBall();
+  ui.renderCourts(courtId());
+  ui.showScreen('courts');
+  drawCourtPictures(); // after showing, so the canvases have a size
+}
+
+/** A court tile was tapped: it's your home court from now on. */
+function pickCourt(id) {
+  if (id === courtId()) return;
+  game.court = id;
+  saveJSON(KEYS.court, id);
+  audio.select();
+  redrawCourt();
+  ui.renderCourts(id);
+  drawCourtPictures(true);
+}
+
+/**
+ * Draw the Courts screen's pictures: each court with its hoop, at the current
+ * difficulty's hoop distance. `previewOnly` skips the tiles (they never change).
+ */
+function drawCourtPictures(previewOnly = false) {
+  previewHoop.setDistance(game.difficulty.hoopZ, game.difficulty.hoopRange);
+  for (const target of ui.courtCanvases(previewOnly)) {
+    const id = target.dataset.court;
+    const width = target.clientWidth;
+    const height = target.clientHeight;
+    if (!width || !height) continue;
+    const dpr = Math.min(view.dpr, CONFIG.courtPreviewPixelRatio);
+    target.width = Math.round(width * dpr);
+    target.height = Math.round(height * dpr);
+    const c = target.getContext('2d');
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    fitCamera(width, height, previewHoop.baseZ); // the camera is shared, so aim it at this picture
+    previewHoop.setColors(courtTheme(id).hoop);
+    drawCourt(c, width, height, previewHoop, id);
+    previewHoop.drawBack(c);
+    previewHoop.drawFront(c);
+  }
+  fitCamera(view.width, view.height, hoop.baseZ); // back to the game's camera
 }
 
 window.addEventListener('resize', resize);
@@ -267,6 +329,8 @@ ui.onFriendPage({
 });
 ui.onCollect(collectReward);
 ui.onShop(showShop);
+ui.onCourts(showCourts);
+ui.onCourtPick(pickCourt);
 ui.onShopItem(shopItem);
 ui.onItem(useItem);
 ui.onMute(() => ui.setMuted(audio.toggleMute()));
@@ -1157,7 +1221,7 @@ function render(time) {
   ctx.translate(shakeX, shakeY);
 
   ctx.drawImage(courtCanvas, 0, 0, width, height);
-  if (FX) effects.drawMotes(ctx, width, height, time, isOnFire());
+  if (FX) effects.drawMotes(ctx, width, height, time, isOnFire(), courtMote(courtId()));
   for (const b of flying) b.drawShadow(ctx);
   ball.drawShadow(ctx);
 
