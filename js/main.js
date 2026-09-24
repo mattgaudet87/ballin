@@ -196,7 +196,10 @@ function resize() {
     c.height = Math.round(view.height * view.dpr);
   }
   redrawCourt();
-  if (ui.isShowing('customize')) drawLookPictures(); // they're sized to the screen too
+  if (ui.isShowing('customize')) {
+    drawLookPictures(); // they're sized to the screen too
+    if (game.customizeTab === 'ball') drawShopBalls();
+  }
 }
 
 /** The stadium we play in: the one picked on the Customize screen, or the difficulty's classic. */
@@ -248,6 +251,7 @@ function showCustomizeTab(tab, note = null) {
   const rebuilt = ui.renderCustomize(tab, wallet, { stadium: courtId(), floor: floorId() }, note, inventory);
   // New tiles need their pictures; otherwise only the big preview can have changed
   if (tab !== 'ball' && tab !== 'powerups') drawLookPictures(!rebuilt);
+  if (tab === 'ball') drawShopBalls();
 }
 
 /**
@@ -329,12 +333,12 @@ function drawLookPictures(previewOnly = false) {
   fitCamera(view.width, view.height, hoop.baseZ); // back to the game's camera
 }
 
-/** Spin the Balls tab's textured preview tiles: one turn every 3.2s, only while it's open. */
-function drawShopBalls(time) {
+/** Draw the Balls tab's textured preview tiles as a single still frame (like the classic balls). */
+function drawShopBalls() {
   const canvases = ui.shopCanvases();
   if (!canvases.length) return;
   const dpr = Math.min(view.dpr, CONFIG.courtPreviewPixelRatio);
-  const spin = -(time / 3.2) * (Math.PI * 2);
+  const spin = 0;
   for (const c of canvases) {
     const w = c.clientWidth;
     const h = c.clientHeight;
@@ -1368,7 +1372,6 @@ function render(time) {
 
   if (FX) effects.drawPost(ctx, width, height);
 
-  if (ui.isShowing('customize') && game.customizeTab === 'ball') drawShopBalls(time);
 }
 
 let lastTime = performance.now();
