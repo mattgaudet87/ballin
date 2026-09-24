@@ -228,6 +228,7 @@ function applyDifficulty(id) {
   ui.setLockerTitle(game.difficulty.name);
   if (ui.isShowing('hothand')) ui.renderHotHandHub(missionViews(), inventory);
   if (ui.isShowing('friend')) showFriend(friendPage.username); // their bests too
+  if (ui.isShowing('mode')) showModeScreenStats();
 }
 
 // --- Customize: stadiums, floors and ball styles ------------------------------
@@ -346,11 +347,15 @@ new SwipeInput(canvas, {
 ui.onModeSelect((modeId) => {
   if (modeId === 'hothand') showHotHandHub();
   else if (modeId === 'friends') showOnline();
-  else startGame(modeId);
+  else showModeScreen(modeId);
 });
 ui.onDifficulty(applyDifficulty);
 ui.onHome(showHome);
 ui.onHotHandPlay(() => startGame('hothand'));
+ui.onModePlay(() => startGame(game.pendingMode));
+ui.onDifficultyButton(() => {
+  ui.showDifficultyPopup(game.difficulty.id, (id) => changeDifficultyDuringGame(id));
+});
 ui.onFriendsStart(startMatch);
 // The handoff screen's "I'm ready" button already is the tap to start
 ui.onHandoffReady(() => startGame('friends', { tapToStart: false }));
@@ -438,6 +443,28 @@ function showHotHandHub() {
   showRecords();
   ui.renderHotHandHub(missionViews(), inventory);
   ui.showScreen('hothand');
+}
+
+/**
+ * Blitz / Free Throw: pick a difficulty and see this mode's stats before
+ * playing. `game.pendingMode` remembers which mode the PLAY button starts.
+ */
+function showModeScreen(modeId) {
+  game.state = 'menu';
+  game.pendingMode = modeId;
+  newBall();
+  showRecords();
+  showModeScreenStats();
+  ui.showScreen('mode');
+}
+
+/** Refresh the mode screen's stats for the current difficulty. */
+function showModeScreenStats() {
+  const mode = MODES[game.pendingMode];
+  ui.showModeScreen(mode, {
+    best: game.best[mode.id][game.difficulty.id],
+    lifetime: game.lifetime[mode.id][game.difficulty.id],
+  });
 }
 
 /**
@@ -739,7 +766,9 @@ function startGame(modeId, { tapToStart = true } = {}) {
   hoop.reset();
   effects.reset();
   newBall();
-  ui.showGame({ powerUps: mode.powerUps });
+  // Passing Blitz with Friends or an online challenge changes another player's
+  // turn or a sent challenge, so only solo modes can switch difficulty mid-game.
+  ui.showGame({ powerUps: mode.powerUps, canChangeDifficulty: !mode.passAndPlay && !mode.online });
   const title = mode.online ? `vs ${game.challenge.opponent}` : mode.name;
   if (tapToStart) ui.showTapToStart(`${title} · ${game.difficulty.name}`);
   else beginPlay();
@@ -791,6 +820,21 @@ function leaveGame() {
   } else {
     showHome();
   }
+}
+
+/**
+ * The ⇄ button during a game: switch difficulty right away by ending this
+ * game (without counting it) and starting a fresh one on the new difficulty.
+ */
+function changeDifficultyDuringGame(id) {
+  if (!inGame() || id === game.difficulty.id) return;
+  const mode = game.mode;
+  flying.length = 0;
+  inventory.selectedBall = null; // an unused specialty ball goes back in the locker
+  const diff = game.difficulty.id;
+  saveNumber(`${KEYS.baskets}${mode.id}.${diff}`, game.lifetime[mode.id][diff]);
+  applyDifficulty(id);
+  startGame(mode.id);
 }
 
 /** True during a game, including the "Tap to start" moment before it begins. */

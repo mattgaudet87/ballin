@@ -24,6 +24,7 @@ const $$ = (selector) => document.querySelectorAll(selector);
 /** Menu screens by name (only one is visible at a time). */
 const SCREENS = {
   home: 'home-screen',
+  mode: 'mode-screen',
   customize: 'customize-screen',
   hothand: 'hothand-screen',
   friends: 'friends-screen',
@@ -33,6 +34,13 @@ const SCREENS = {
   results: 'results-screen',
   gameover: 'gameover-screen',
 };
+
+/** Stadium ids grouped into the picker's sections, in picker order. */
+const STADIUM_GROUPS = [
+  ['Arenas', ['heatwave', 'goldrush', 'evergreen', 'icebox', 'inferno', 'sweetswish']],
+  ['Outdoor', ['canopy', 'pinehollow', 'summit', 'lantern', 'sunset']],
+  ['Classics', ['easy', 'normal', 'hard']],
+];
 
 /** Small HTML icon for an item (drawn with CSS, see "Item icons" in style.css). */
 export function itemIcon(id) {
@@ -93,6 +101,14 @@ export class UI {
       drinkTray: $('drink-tray'),
       muteBtn: $('mute-btn'),
       leaveBtn: $('leave-btn'),
+      difficultyBtn: $('difficulty-btn'),
+      difficultyPopup: $('difficulty-popup'),
+      modeScreenTitle: $('mode-screen-title'),
+      modeScreenDesc: $('mode-screen-desc'),
+      modeScreenBest: $('mode-screen-best'),
+      modeScreenBestLabel: $('mode-screen-best-label'),
+      modeScreenLifetime: $('mode-screen-lifetime'),
+      modeScreenPlayBtn: $('mode-screen-play-btn'),
       tapStart: $('tap-start'),
       tapStartMode: $('tap-start-mode'),
       lockerTitle: $('locker-title'),
@@ -133,13 +149,9 @@ export class UI {
     $$('[data-back], [data-home], #menu-btn').forEach((btn) => btn.addEventListener('click', callback));
   }
 
-  /**
-   * The home screen's Customize button (top left) and coins button.
-   * callback(tab) with the tab to open: 'stadium' or 'ball'.
-   */
+  /** The home screen's Customize button (top left), which also shows your coin balance. */
   onCustomize(callback) {
-    $('customize-btn').addEventListener('click', () => callback('stadium'));
-    $('shop-btn').addEventListener('click', () => callback('ball'));
+    $('customize-btn').addEventListener('click', () => callback());
   }
 
   /** callback('stadium' | 'floor' | 'ball') when a Customize tab is tapped. */
@@ -161,6 +173,16 @@ export class UI {
 
   onHotHandPlay(callback) {
     $('hothand-play-btn').addEventListener('click', callback);
+  }
+
+  /** The PLAY button on the Blitz / Free Throw mode screen. */
+  onModePlay(callback) {
+    this.el.modeScreenPlayBtn.addEventListener('click', callback);
+  }
+
+  /** The ⇄ button shown during a game; opens the change-difficulty popup. */
+  onDifficultyButton(callback) {
+    this.el.difficultyBtn.addEventListener('click', callback);
   }
 
   /** callback([name1, name2]) when the friends match starts. */
@@ -304,6 +326,41 @@ export class UI {
     return !$(SCREENS[name]).classList.contains('hidden');
   }
 
+  /**
+   * Fill the Blitz / Free Throw mode screen: its name, description, and this
+   * mode's best score + lifetime baskets for whichever difficulty is selected.
+   * @param mode        from modes.js (name, desc, bestLabel)
+   * @param stats.best      best score for the current difficulty
+   * @param stats.lifetime  lifetime baskets for the current difficulty
+   */
+  showModeScreen(mode, stats) {
+    const e = this.el;
+    e.modeScreenTitle.textContent = mode.name.toUpperCase();
+    e.modeScreenDesc.textContent = mode.desc;
+    e.modeScreenBestLabel.textContent = mode.bestLabel ?? 'Best';
+    e.modeScreenBest.textContent = stats.best;
+    e.modeScreenLifetime.textContent = stats.lifetime;
+  }
+
+  /**
+   * Ask which difficulty to switch to during a game (the ⇄ button). `current`
+   * is highlighted. Calls onPick(difficultyId), or nothing if cancelled.
+   */
+  showDifficultyPopup(current, onPick) {
+    const popup = this.el.difficultyPopup;
+    popup.querySelectorAll('[data-diff-pick]').forEach((btn) => btn.classList.toggle('selected', btn.dataset.diffPick === current));
+    popup.classList.remove('hidden');
+    const close = (e) => {
+      const pick = e.target.closest('[data-diff-pick]');
+      const cancel = e.target === popup || e.target.closest('[data-diff-pick-cancel]');
+      if (!pick && !cancel) return;
+      popup.classList.add('hidden');
+      popup.removeEventListener('click', close);
+      if (pick) onPick(pick.dataset.diffPick);
+    };
+    popup.addEventListener('click', close);
+  }
+
   /** Each difficulty has its own locker, so say which one this is. */
   setLockerTitle(difficultyName) {
     this.el.lockerTitle.textContent = `${difficultyName} locker`;
@@ -360,12 +417,14 @@ export class UI {
     if (rebuild) {
       e.lookList.dataset.kind = tab;
       e.lookList.setAttribute('aria-label', tab === 'stadium' ? 'Stadiums' : 'Floors');
-      e.lookList.innerHTML = Object.keys(CATALOG[tab]).map((id) => lookTile(tab, id, look)).join('');
+      e.lookList.innerHTML = tab === 'stadium'
+        ? STADIUM_GROUPS.map(([title, ids]) => `<h2 class="section-title">${title}</h2><div class="court-list" role="radiogroup" aria-label="${title}">${ids.map((id) => lookTile(tab, id, look)).join('')}</div>`).join('')
+        : `<div class="court-list" role="radiogroup">${Object.keys(CATALOG[tab]).map((id) => lookTile(tab, id, look)).join('')}</div>`;
       e.lookHow.textContent = tab === 'stadium'
         ? 'Every mode plays in your stadium. Tap one you own to use it.'
         : 'Floors work in any stadium. “Stadium” keeps the stadium’s own floor.';
     }
-    for (const tile of e.lookList.children) {
+    for (const tile of e.lookList.querySelectorAll('.court-tile')) {
       const id = tile.dataset.look;
       const item = CATALOG[tab][id];
       const owned = wallet.owns(tab, id);
@@ -594,11 +653,12 @@ export class UI {
   // --- In game -------------------------------------------------------------------
 
   /** Hide menus and show the in-game HUD (and power-up trays if this mode has them). */
-  showGame({ powerUps }) {
+  showGame({ powerUps, canChangeDifficulty }) {
     this.showScreen(null);
     show(this.el.hud);
     this.el.ballTray.classList.toggle('hidden', !powerUps);
     this.el.drinkTray.classList.toggle('hidden', !powerUps);
+    this.el.difficultyBtn.classList.toggle('hidden', !canChangeDifficulty);
     this.shown = {};
   }
 
@@ -619,6 +679,7 @@ export class UI {
     hide(this.el.ballTray);
     hide(this.el.drinkTray);
     hide(this.el.leaveBtn);
+    hide(this.el.difficultyBtn);
     this.shown = {};
   }
 
@@ -727,7 +788,7 @@ function lookTile(kind, id, look) {
   const canvas = isStadium ? `data-court="${id}"` : `data-floor="${id}"`;
   return `<button class="court-tile" type="button" role="radio" data-kind="${kind}" data-look="${id}" style="--dot: ${color}">
     <canvas ${canvas} aria-hidden="true"></canvas>
-    <span class="court-tile-name"><i class="court-dot"></i>${CATALOG[kind][id].name}</span>
+    <span class="court-tile-name"><i class="court-dot"></i><span class="court-tile-name-text">${CATALOG[kind][id].name}</span></span>
     <span class="court-tile-price"></span>
   </button>`;
 }

@@ -209,6 +209,26 @@ body {
   -webkit-backdrop-filter: blur(6px);
 }
 
+/* Change-difficulty button, just under LEAVE */
+#difficulty-btn {
+  position: absolute;
+  top: calc(var(--safe-top) + 108px);
+  right: 14px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+  font-size: 16px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  z-index: 20;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
 /* --- Tap to start --------------------------------------------------------- */
 
 .tap-start {
@@ -1006,11 +1026,6 @@ body {
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
 }
 
-/* Home picker */
-.difficulty-picker.home-picker {
-  margin: 18px 0 8px;
-}
-
 /* Customize button in the home screen's top-left corner (same spot as the back arrows) */
 .customize-btn {
   position: absolute;
@@ -1034,6 +1049,18 @@ body {
 
 .customize-btn:active {
   transform: scale(0.96);
+}
+
+/* Coin balance shown inside the Customize button */
+.customize-coins {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 8px;
+  margin-left: 2px;
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ffd23f;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Small dot in a court's lane paint color (set from ui.js) */
@@ -1580,23 +1607,12 @@ body {
 
 /* --- Coins and the Shop ------------------------------------------------------ */
 
-/* Lifetime baskets and the coins/Shop button sit side by side on the home screen */
+/* Lifetime baskets pill on the home screen */
 .hero-pills {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: 8px;
-}
-
-.coin-pill {
-  border-color: rgba(255, 210, 63, 0.5);
-  background: linear-gradient(180deg, rgba(255, 210, 63, 0.24), rgba(255, 160, 0, 0.12));
-  font-family: var(--font);
-  cursor: pointer;
-}
-
-.coin-pill:active {
-  transform: scale(0.96);
 }
 
 /* Tiny CSS coin (like .mini-ball) */
@@ -1955,13 +1971,19 @@ body {
   gap: 5px;
   padding: 0 3px;
   font-family: var(--display);
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 800;
   font-style: italic;
   line-height: 1;
   text-transform: uppercase;
-  white-space: nowrap;
+  min-width: 0;
+}
+
+.court-tile-name-text {
   overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .court-tile-price {

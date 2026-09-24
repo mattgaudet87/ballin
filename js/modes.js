@@ -13,6 +13,7 @@ export const MODES = {
   blitz: {
     id: 'blitz',
     name: 'Blitz',
+    desc: '60 seconds. Score all you can.',
     timed: true,
     duration: 60, // seconds
     endsOnMiss: false,
@@ -60,6 +61,8 @@ export const MODES = {
   freethrow: {
     id: 'freethrow',
     name: 'Free Throw',
+    desc: 'No clock, no losing. How many in a row?',
+    bestLabel: 'Record',
     timed: false,
     duration: 0,
     endsOnMiss: false, // missing just resets your streak

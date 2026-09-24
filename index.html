@@ -64,6 +64,9 @@
     <!-- Leave the game (every mode). In Free Throw it says END and shows your results. -->
     <button id="leave-btn" class="hidden" type="button">✕ LEAVE</button>
 
+    <!-- Change difficulty mid-game (solo modes only): ends this game and starts a new one -->
+    <button id="difficulty-btn" class="hidden" type="button" aria-label="Change difficulty">⇄</button>
+
     <div id="hint" class="hidden">
       <span class="hint-arrow">↑</span>
       Swipe up to shoot
@@ -79,23 +82,19 @@
     <!-- Home screen: pick a difficulty and a mode -->
     <section id="home-screen" class="overlay home scroll">
       <div class="panel">
-        <!-- Top-left corner: stadium, floor and ball looks -->
-        <button id="customize-btn" class="customize-btn" type="button"><span aria-hidden="true">🎨</span> Customize</button>
+        <!-- Top-left corner: stadium, floor and ball looks (and your coin balance) -->
+        <button id="customize-btn" class="customize-btn" type="button">
+          <span aria-hidden="true">🎨</span> Customize
+          <span class="customize-coins"><span class="mini-coin" aria-hidden="true"></span><b id="coin-total">0</b></span>
+        </button>
         <header class="hero">
           <div class="hero-ball" aria-hidden="true"></div>
           <h1 class="title">BALLIN'</h1>
           <p class="tagline">Flick to shoot. Aim is everything.</p>
           <div class="hero-pills">
             <div class="lifetime-total"><span class="mini-ball" aria-hidden="true"></span><b id="lifetime-total">0</b> lifetime baskets</div>
-            <button id="shop-btn" class="lifetime-total coin-pill" type="button"><span class="mini-coin" aria-hidden="true"></span><b id="coin-total">0</b> Shop ›</button>
           </div>
         </header>
-
-        <div class="difficulty-picker home-picker" role="radiogroup" aria-label="Difficulty">
-          <button type="button" data-difficulty="easy">Easy</button>
-          <button type="button" data-difficulty="normal">Normal</button>
-          <button type="button" data-difficulty="hard">Hard</button>
-        </div>
 
         <div class="modes">
           <!-- Blitz is the full-width hero; Hot Hand + Free Throw pair up; Friends is a wide strip -->
@@ -159,6 +158,27 @@
       </div>
     </section>
 
+    <!-- Blitz / Free Throw: pick a difficulty and see your stats for this mode before playing -->
+    <section id="mode-screen" class="overlay scroll hidden">
+      <div class="panel">
+        <button class="back-btn" type="button" data-back aria-label="Back">‹</button>
+        <h1 id="mode-screen-title" class="mode-title">BLITZ</h1>
+        <p id="mode-screen-desc" class="tagline"></p>
+
+        <div class="difficulty-picker" role="radiogroup" aria-label="Difficulty">
+          <button type="button" data-difficulty="easy">Easy</button>
+          <button type="button" data-difficulty="normal">Normal</button>
+          <button type="button" data-difficulty="hard">Hard</button>
+        </div>
+
+        <div class="hub-stats">
+          <div><span id="mode-screen-best">0</span><small id="mode-screen-best-label">Best</small></div>
+          <div><span id="mode-screen-lifetime">0</span><small>Lifetime baskets</small></div>
+        </div>
+        <button id="mode-screen-play-btn" class="big-btn" type="button">PLAY</button>
+      </div>
+    </section>
+
     <!-- Customize: stadiums, floors and ball styles (bought with coins) -->
     <section id="customize-screen" class="overlay scroll hidden">
       <div class="panel">
@@ -183,7 +203,7 @@
               <span id="court-preview-name" class="court-preview-name"></span>
             </div>
           </div>
-          <div id="look-list" class="court-list" role="radiogroup"></div>
+          <div id="look-list"></div>
           <p id="look-how" class="how"></p>
         </div>
 
@@ -334,6 +354,20 @@
         </div>
       </div>
     </section>
+
+    <!-- Change difficulty popup: shown by the ⇄ button during a game (tap outside to cancel) -->
+    <div id="difficulty-popup" class="popup hidden" role="dialog" aria-label="Change difficulty">
+      <div class="popup-card">
+        <p class="eyebrow">CHANGE DIFFICULTY</p>
+        <p class="tagline">This ends the current game and starts a new one.</p>
+        <div class="challenge-picks">
+          <button type="button" class="ghost-btn" data-diff-pick="easy">EASY</button>
+          <button type="button" class="ghost-btn" data-diff-pick="normal">NORMAL</button>
+          <button type="button" class="ghost-btn" data-diff-pick="hard">HARD</button>
+        </div>
+        <button type="button" class="link-btn" data-diff-pick-cancel>Cancel</button>
+      </div>
+    </div>
 
     <!-- Challenge popup: pick the difficulty before playing (tap outside to cancel) -->
     <div id="challenge-popup" class="popup hidden" role="dialog" aria-label="Pick a difficulty">
