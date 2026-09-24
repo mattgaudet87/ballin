@@ -187,10 +187,11 @@
         <p class="tagline">Make baskets with a coin in the hoop, or beat friends online, to earn coins.</p>
         <div class="coin-balance"><span class="mini-coin" aria-hidden="true"></span><b id="shop-coins">0</b> coins</div>
 
-        <div class="tabs three" role="tablist">
+        <div class="tabs four" role="tablist">
           <button type="button" role="tab" data-look-tab="stadium">🏟️ Stadium</button>
           <button type="button" role="tab" data-look-tab="floor">🪵 Floors</button>
           <button type="button" role="tab" data-look-tab="ball">🏀 Balls</button>
+          <button type="button" role="tab" data-look-tab="powerups">⚡ Power-ups</button>
         </div>
         <p id="shop-note" class="form-error hidden"></p>
 
@@ -211,6 +212,12 @@
         <div id="balls-panel" class="hidden">
           <div id="shop-list"></div>
           <p class="how">Styles change how your ball looks in every mode. Tap one you own to use it. A Blue Monster (Hot Hand) makes coins worth 2×.</p>
+        </div>
+
+        <!-- Power-ups: buy specialty balls and energy drinks for your current difficulty's locker -->
+        <div id="powerups-panel" class="hidden">
+          <div id="powerup-list"></div>
+          <p class="how">Power-ups go in your <b id="powerup-locker-name">Normal</b> locker. Use them from the trays during a Hot Hand run.</p>
         </div>
       </div>
     </section>
@@ -390,6 +397,22 @@
         <p class="eyebrow">MISSION REWARD</p>
         <div id="reward-items" class="reward-items"></div>
         <p class="tap-hint">Tap anywhere to add to your locker</p>
+      </div>
+    </div>
+
+    <!-- Pause popup: shown by LEAVE mid-game, styled like Free Throw's END (tap outside to resume) -->
+    <div id="pause-popup" class="popup hidden" role="dialog" aria-label="Paused">
+      <div class="popup-card">
+        <p class="eyebrow">PAUSED</p>
+        <div class="pause-stats">
+          <div class="pause-stat"><span id="pause-score">0</span><small>SCORE</small></div>
+          <div id="pause-time-stat" class="pause-stat hidden"><span id="pause-time">60</span><small>TIME LEFT</small></div>
+        </div>
+        <p id="pause-note" class="tagline hidden"></p>
+        <div class="pause-buttons">
+          <button type="button" class="ghost-btn" data-pause-resume>RESUME</button>
+          <button type="button" class="forfeit-btn" data-pause-forfeit>FORFEIT</button>
+        </div>
       </div>
     </div>
   </main>

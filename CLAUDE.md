@@ -61,10 +61,12 @@ js/
                classics easy/normal/hard), FLOORS = floor surfaces for any stadium. Drawn once into a cached canvas on
                resize / difficulty / stadium / floor change. No DOM code (wallet.js, and so api/, imports it)
   input.js     Pointer events (touch + mouse) → swipe { dx, dy, speed } → onShoot callback
-  ui.js        HTML overlays: home, Customize (Stadium / Floors / Balls tabs), Hot Hand hub (missions + locker), Blitz with Friends
-               (online + Pass and play button), Pass and play setup, friend page, handoff/results, game over, popups, HUD, trays
+  ui.js        HTML overlays: home, Customize (Stadium / Floors / Balls / Power-ups tabs), Hot Hand hub (missions + locker),
+               Blitz with Friends (online + Pass and play button), Pass and play setup, friend page, handoff/results,
+               game over, popups (reward, pause), HUD, trays
   audio.js     Web Audio sound effects (synthesized, no files) + mute (saved to localStorage)
-  effects.js   Particles, fire trail, floating text, screen shake, on-fire edge glow (screen space)
+  effects.js   Particles, fire trail, floating text (screen space). No screen flash, screen shake or
+               pulsing fire glow — the game stays calm and low-stim on purpose
   storage.js   try/catch-wrapped localStorage helpers (numbers, booleans, JSON)
 ```
 
@@ -168,6 +170,10 @@ js/
   difficulty id). The picked floor (`game.floor`, `ballin.floor`, `floorId()`) goes in any stadium; 'stadium' = its own
   wood. Courts picked before stadiums cost coins are granted for free at startup. A theme can also set `hoop` colors (`hoop.setColors()`), `mote` (dust tint in `drawMotes`) and
   `grade` (FX color grade). `redrawCourt()` redraws the cached background and hoop colors after any change.
+  A fourth **Power-ups** tab (`buyPowerUp(id)` in main.js) sells specialty balls and energy drinks with a
+  `price` (items.js): unlike ball/stadium/floor these aren't "owned forever", so buying one calls
+  `wallet.spend(item.price)` (just deducts coins) and `inventory.add(id, 1)`, dropping it straight into
+  whichever difficulty's locker is currently active.
 - **Scoring** (`onMake()` in main.js): (1 + swish bonus) × fire 2× × basket multiplier ×
   specialty ball × Green Monster multiplier, rounded. Each extra multiplier shows as a label under "+N".
 - **Lockers are per difficulty:** `Inventory` keeps `lockers.easy/normal/hard`, and
@@ -190,12 +196,17 @@ js/
   (8) evenly spaced x positions across the difficulty's `startXRange`. It never uses the same
   spot twice in a row (`game.spot`), so every shot needs fresh aim. Free Throw (`fixedSpot`) is always centered. Power barely matters by design
   (`CONFIG.shot.powerForgiveness`, `minPower`/`maxPower`).
-- **Leave button** (`#leave-btn`, `leaveGame()` in main.js): shown in every mode during a game.
-  It asks to confirm, then quits without a result (no game over, best or mission progress;
-  lifetime baskets are kept) and goes back to where the game started: home, the Hot Hand hub,
-  the Pass and play screen (the match is dropped) or Blitz with Friends. Two exceptions: Free
-  Throw's button says END and shows results (`endGame()`), and leaving while answering an
-  online challenge sends your score so far (so you can't quit and replay for a better one).
+- **Leave button** (`#leave-btn`, `leaveGame()`/`forfeitGame()` in main.js): shown in every mode during
+  a game. Tapping it sets `game.paused = true` (the main loop's `update()` stops, so the clock and
+  physics freeze) and opens the pause popup (`ui.showPausePopup()`): current score, time left (timed
+  modes only), and RESUME / FORFEIT buttons, styled like every other in-game popup instead of a native
+  `confirm()`. RESUME just unpauses. FORFEIT calls `forfeitGame()`, which quits without a result (no
+  game over, best or mission progress; lifetime baskets are kept) and goes back to where the game
+  started: home, the Hot Hand hub, the Pass and play screen (the match is dropped) or Blitz with
+  Friends. Two exceptions: Free Throw's button says END and skips the popup entirely, calling
+  `endGame()` right away (there's nothing to forfeit — no clock, no way to lose), and forfeiting while
+  answering an online challenge sends your score so far (so you can't quit and replay for a better one;
+  the popup shows a note saying so).
 - **Rapid fire / ball states:** `ball` (main.js, a `let`) is the ball waiting at the bottom;
   `flying` holds every ball in the air, and several can fly at once. `shoot()` moves `ball` into
   `flying` with its own `shot` snapshot, then makes a new hidden ball (`state: 'reloading'`)
@@ -254,10 +265,11 @@ js/
   Route it in the `ui.onModeSelect` handler in main.js. New rule flags need branches in main.js.
 - **New difficulty or tweak one:** edit `DIFFICULTIES` in modes.js and add a button with
   `data-difficulty="<id>"` inside each `.difficulty-picker` in index.html.
-- **New power-up:** add it to `ITEMS` and `BALL_IDS`/`DRINK_IDS` in items.js. Put its effect in
-  `Inventory.startShot()` (snapshot) and use it in main.js (`onMake()`, `boostOn()` or `hoopSpeed()`).
-  Give it a CSS icon (`.icon-ball.<id>` or `.icon-can.<id> { --can: color }`) and add it to
-  `REWARD_WEIGHTS` in missions.js so missions can award it. `comingSoon: true` greys an item out.
+- **New power-up:** add it to `ITEMS` (with a `price`, for the Power-ups tab) and `BALL_IDS`/`DRINK_IDS`
+  in items.js. Put its effect in `Inventory.startShot()` (snapshot) and use it in main.js (`onMake()`,
+  `boostOn()` or `hoopSpeed()`). Give it a CSS icon (`.icon-ball.<id>` or `.icon-can.<id> { --can: color }`)
+  and add it to `REWARD_WEIGHTS` in missions.js so missions can award it too. `comingSoon: true` greys it
+  out and keeps it off the Power-ups tab.
 - **New ball style:** add it to `BALL_STYLES` in wallet.js (name, price, colors, seam,
   optional `glow`). The Balls tab card and in-game drawing pick it up automatically.
 - **Coin odds/values:** `CONFIG.coins` in config.js.

@@ -111,6 +111,7 @@ const game = {
   basketMultiplier: null, // Hot Hand bonus on the NEXT ball's basket, e.g. { value: 3, color }
   coin: false, // is a coin floating in the hoop for the NEXT ball?
   spot: -1, // which of the ball's starting spots was used last (so it never repeats)
+  paused: false, // the pause popup is up (LEAVE was tapped); update() stops
 };
 
 const physicsEvents = [];
@@ -233,7 +234,7 @@ function applyDifficulty(id) {
 
 // --- Customize: stadiums, floors and ball styles ------------------------------
 
-/** Open the Customize screen on a tab ('stadium' | 'floor' | 'ball'). */
+/** Open the Customize screen on a tab ('stadium' | 'floor' | 'ball' | 'powerups'). */
 function showCustomize(tab = game.customizeTab) {
   game.state = 'menu';
   newBall();
@@ -244,16 +245,19 @@ function showCustomize(tab = game.customizeTab) {
 
 function showCustomizeTab(tab, note = null) {
   game.customizeTab = tab;
-  const rebuilt = ui.renderCustomize(tab, wallet, { stadium: courtId(), floor: floorId() }, note);
+  const rebuilt = ui.renderCustomize(tab, wallet, { stadium: courtId(), floor: floorId() }, note, inventory);
   // New tiles need their pictures; otherwise only the big preview can have changed
-  if (tab !== 'ball') drawLookPictures(!rebuilt);
+  if (tab !== 'ball' && tab !== 'powerups') drawLookPictures(!rebuilt);
 }
 
 /**
  * A stadium, floor or ball was tapped: use it if you own it, otherwise buy it
- * (after asking). kind = 'stadium' | 'floor' | 'ball'.
+ * (after asking). kind = 'stadium' | 'floor' | 'ball'. A power-up is bought
+ * separately (see buyPowerUp) since you can buy more than one.
  */
 function customizeItem(kind, id) {
+  if (kind === 'powerup') return buyPowerUp(id);
+
   const item = CATALOG[kind][id];
   if (!wallet.owns(kind, id)) {
     if (wallet.balance < item.price) {
@@ -282,6 +286,21 @@ function customizeItem(kind, id) {
   }
   showCustomizeTab(kind);
   showRecords();
+}
+
+/** Buy one specialty ball or energy drink for the current difficulty's locker. */
+function buyPowerUp(id) {
+  const item = ITEMS[id];
+  if (item.comingSoon) return;
+  if (wallet.balance < item.price) {
+    return showCustomizeTab('powerups', `You need ${item.price - wallet.balance} more coins for ${item.name}.`);
+  }
+  if (!confirm(`Buy 1 ${item.name} for ${item.price} coins? It goes in your ${game.difficulty.name} locker.`)) return;
+  wallet.spend(item.price);
+  inventory.add(id, 1);
+  audio.buy();
+  syncScores(); // save the purchase to your account
+  showCustomizeTab('powerups');
 }
 
 /**
@@ -364,7 +383,7 @@ window.addEventListener('pointerdown', () => audio.unlock());
 
 new SwipeInput(canvas, {
   // Swipes may start anywhere in the lower half, once the ball is ready.
-  canStart: (x, y) => game.state === 'playing' && !timeIsUp() && !game.ending && ball.state === 'ready' && y > view.height * 0.5,
+  canStart: (x, y) => game.state === 'playing' && !game.paused && !timeIsUp() && !game.ending && ball.state === 'ready' && y > view.height * 0.5,
   onShoot: shoot,
 });
 
@@ -785,6 +804,7 @@ function startGame(modeId, { tapToStart = true } = {}) {
     reloadTimer: 0,
     ending: false,
     endTimer: 0,
+    paused: false,
   });
   flying.length = 0;
   hoop.reset();
@@ -808,9 +828,10 @@ function beginPlay() {
 }
 
 /**
- * The LEAVE button: quit the game and go back to where it was started from.
- * The game doesn't count (no game over screen, no best score, no missions),
- * but baskets you made still add to your lifetime count.
+ * The LEAVE button: pause the game and ask, the same way Free Throw's END
+ * button works — show the run so far, then RESUME to keep playing or
+ * FORFEIT to give it up (no game over screen, no best score, no missions;
+ * baskets you made still add to your lifetime count).
  */
 function leaveGame() {
   if (!inGame()) return;
@@ -819,15 +840,25 @@ function leaveGame() {
   // Free Throw has no clock and no way to lose, so END just finishes the session
   if (mode.endless) return endGame();
 
-  // Answering a friend's challenge: your score so far is sent, so nobody can
-  // quit and replay until they get a good score.
-  if (mode.online && game.challenge.id) {
-    if (confirm(`Leave now? Your score of ${game.score} will be sent to ${game.challenge.opponent}.`)) endGame();
-    return;
-  }
+  // Answering a friend's challenge: forfeiting sends your score so far, so
+  // nobody can quit and replay until they get a good score.
+  const note = mode.online && game.challenge.id
+    ? `Forfeiting sends your score of ${game.score} to ${game.challenge.opponent}.`
+    : null;
 
-  const what = mode.passAndPlay ? 'the match' : 'this game';
-  if (!confirm(`Leave ${what}? It won’t count.`)) return;
+  game.paused = true;
+  ui.showPausePopup(
+    { score: game.score, timeLeft: mode.timed ? Math.ceil(game.timeLeft) : null, note },
+    { onResume: () => { game.paused = false; }, onForfeit: forfeitGame },
+  );
+}
+
+/** FORFEIT on the pause popup: actually give up the game (see leaveGame()). */
+function forfeitGame() {
+  game.paused = false;
+  const mode = game.mode;
+
+  if (mode.online && game.challenge.id) return endGame();
 
   flying.length = 0;
   inventory.selectedBall = null; // an unused specialty ball goes back in the locker
@@ -1343,13 +1374,16 @@ function render(time) {
 let lastTime = performance.now();
 
 function frame(now) {
+  // Scheduled before doing any work: a canvas can briefly report a 0 width
+  // while an overlay is scrolling, which throws in render(). Without this,
+  // that one bad frame would cancel every frame after it forever.
+  requestAnimationFrame(frame);
   // Time since the last frame, capped so a hiccup (or a hidden tab) can't
   // make the ball teleport.
   const dt = Math.min(0.05, (now - lastTime) / 1000);
   lastTime = now;
-  update(dt);
+  if (!game.paused) update(dt);
   render(now / 1000);
-  requestAnimationFrame(frame);
 }
 
 applyDifficulty(game.difficulty.id);

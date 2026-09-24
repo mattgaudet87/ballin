@@ -1,7 +1,9 @@
 /**
  * items.js
  * ---------------------------------------------------------------------------
- * Power-ups the player earns from missions, and the Inventory that stores them.
+ * Power-ups the player earns from missions or buys with coins (the
+ * Power-ups tab on the Customize screen, see buyPowerUp() in main.js), and
+ * the Inventory that stores them.
  *
  *   Specialty balls: used for ONE shot and multiply that shot's points.
  *                    Selecting one loads it as your next ball; it's used up
@@ -12,23 +14,25 @@
  *
  * Every difficulty (Easy / Normal / Hard) has its OWN locker: items earned on
  * Easy can only be used on Easy, and so on. setDifficulty() switches which
- * locker the Inventory is showing and using.
+ * locker the Inventory is showing and using. Buying a power-up adds it to
+ * whichever locker is currently active.
  *
- * To add an item: add it to ITEMS (and to BALL_IDS or DRINK_IDS), add its
- * effect in Inventory.startShot() / main.js, and give it an icon in style.css.
+ * To add an item: add it to ITEMS (with a `price`, and to BALL_IDS or
+ * DRINK_IDS), add its effect in Inventory.startShot() / main.js, and give it
+ * an icon in style.css.
  */
 import { CONFIG } from './config.js';
 import { loadJSON, saveJSON } from './storage.js';
 
 export const ITEMS = {
-  gold: { type: 'ball', name: 'Gold Ball', multiplier: 3, desc: '3× points on one shot' },
-  silver: { type: 'ball', name: 'Silver Ball', multiplier: 2, desc: '2× points on one shot' },
-  bronze: { type: 'ball', name: 'Bronze Ball', multiplier: 1.5, desc: '1.5× points on one shot' },
+  gold: { type: 'ball', name: 'Gold Ball', multiplier: 3, desc: '3× points on one shot', price: 150 },
+  silver: { type: 'ball', name: 'Silver Ball', multiplier: 2, desc: '2× points on one shot', price: 75 },
+  bronze: { type: 'ball', name: 'Bronze Ball', multiplier: 1.5, desc: '1.5× points on one shot', price: 30 },
 
-  white: { type: 'drink', name: 'White Monster', shots: 10, desc: 'Bigger hoop for 10 shots' },
-  green: { type: 'drink', name: 'Green Monster', shots: 10, desc: 'Multiplier climbs every shot for 10 shots' },
-  orange: { type: 'drink', name: 'Orange Monster', shots: 10, desc: 'Moving hoop 25% slower for 10 shots' },
-  blue: { type: 'drink', name: 'Blue Monster', shots: 10, desc: '2× coins for 10 shots' },
+  white: { type: 'drink', name: 'White Monster', shots: 10, desc: 'Bigger hoop for 10 shots', price: 100 },
+  green: { type: 'drink', name: 'Green Monster', shots: 10, desc: 'Multiplier climbs every shot for 10 shots', price: 150 },
+  orange: { type: 'drink', name: 'Orange Monster', shots: 10, desc: 'Moving hoop 25% slower for 10 shots', price: 100 },
+  blue: { type: 'drink', name: 'Blue Monster', shots: 10, desc: '2× coins for 10 shots', price: 120 },
 };
 
 export const BALL_IDS = ['gold', 'silver', 'bronze'];

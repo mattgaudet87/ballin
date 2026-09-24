@@ -2,10 +2,11 @@
  * ui.js
  * ---------------------------------------------------------------------------
  * Everything drawn with regular HTML instead of the canvas:
- *   - menu screens: home, Customize (Stadium / Floors / Balls tabs), Hot Hand hub (missions + locker),
- *     Blitz with Friends (online: login, your stats, friends, challenges; Pass and play button),
- *     Pass and play setup (names), a friend's page, pass-the-phone handoff, friends results, game over
- *   - the reward popup
+ *   - menu screens: home, Customize (Stadium / Floors / Balls / Power-ups tabs), Hot Hand hub
+ *     (missions + locker), Blitz with Friends (online: login, your stats, friends, challenges;
+ *     Pass and play button), Pass and play setup (names), a friend's page, pass-the-phone
+ *     handoff, friends results, game over
+ *   - the reward popup and the pause popup (LEAVE mid-game: RESUME or FORFEIT)
  *   - the in-game HUD, "swipe up" hint and power-up trays
  *   - the mute button
  *
@@ -68,6 +69,9 @@ export class UI {
       lookHow: $('look-how'),
       looksPanel: $('looks-panel'),
       ballsPanel: $('balls-panel'),
+      powerupsPanel: $('powerups-panel'),
+      powerupList: $('powerup-list'),
+      powerupLockerName: $('powerup-locker-name'),
       authPassplay: $('auth-passplay'),
       statCoinsWrap: $('stat-coins-wrap'),
       statCoins: $('stat-coins'),
@@ -103,6 +107,11 @@ export class UI {
       leaveBtn: $('leave-btn'),
       difficultyBtn: $('difficulty-btn'),
       difficultyPopup: $('difficulty-popup'),
+      pausePopup: $('pause-popup'),
+      pauseScore: $('pause-score'),
+      pauseTimeStat: $('pause-time-stat'),
+      pauseTime: $('pause-time'),
+      pauseNote: $('pause-note'),
       modeScreenTitle: $('mode-screen-title'),
       modeScreenDesc: $('mode-screen-desc'),
       modeScreenBest: $('mode-screen-best'),
@@ -159,7 +168,7 @@ export class UI {
     $$('[data-look-tab]').forEach((tab) => tab.addEventListener('click', () => callback(tab.dataset.lookTab)));
   }
 
-  /** callback(kind, id) when a stadium, floor or ball on the Customize screen is tapped. */
+  /** callback(kind, id) when a stadium, floor, ball or power-up on the Customize screen is tapped. */
   onCustomizeItem(callback) {
     this.el.shopList.addEventListener('click', (e) => {
       const button = e.target.closest('[data-style]');
@@ -168,6 +177,10 @@ export class UI {
     this.el.lookList.addEventListener('click', (e) => {
       const button = e.target.closest('[data-look]');
       if (button) callback(button.dataset.kind, button.dataset.look);
+    });
+    this.el.powerupList.addEventListener('click', (e) => {
+      const button = e.target.closest('[data-powerup]');
+      if (button) callback('powerup', button.dataset.powerup);
     });
   }
 
@@ -361,6 +374,32 @@ export class UI {
     popup.addEventListener('click', close);
   }
 
+  /**
+   * Pause overlay shown when LEAVE is tapped mid-game: your run so far, then
+   * RESUME (or tap outside) to keep playing, or FORFEIT to give it up.
+   * @param stats.score     current score
+   * @param stats.timeLeft  seconds left, or null to hide that row (untimed modes)
+   * @param stats.note      optional extra line (e.g. an online challenge score warning)
+   */
+  showPausePopup(stats, { onResume, onForfeit }) {
+    const popup = this.el.pausePopup;
+    this.el.pauseScore.textContent = stats.score;
+    this.el.pauseTimeStat.classList.toggle('hidden', stats.timeLeft == null);
+    if (stats.timeLeft != null) this.el.pauseTime.textContent = stats.timeLeft;
+    showMessage(this.el.pauseNote, stats.note);
+    popup.classList.remove('hidden');
+    const close = (e) => {
+      const forfeit = e.target.closest('[data-pause-forfeit]');
+      const resume = e.target === popup || e.target.closest('[data-pause-resume]');
+      if (!forfeit && !resume) return;
+      popup.classList.add('hidden');
+      popup.removeEventListener('click', close);
+      if (forfeit) onForfeit();
+      else onResume();
+    };
+    popup.addEventListener('click', close);
+  }
+
   /** Each difficulty has its own locker, so say which one this is. */
   setLockerTitle(difficultyName) {
     this.el.lockerTitle.textContent = `${difficultyName} locker`;
@@ -390,15 +429,16 @@ export class UI {
 
   /**
    * Fill the Customize screen.
-   * @param tab       'stadium' | 'floor' | 'ball'
-   * @param wallet    coins and what you own (wallet.js)
-   * @param look      what you play on now: { stadium, floor } ids
-   * @param note      optional message (e.g. "You need 40 more coins")
+   * @param tab         'stadium' | 'floor' | 'ball' | 'powerups'
+   * @param wallet      coins and what you own (wallet.js)
+   * @param look        what you play on now: { stadium, floor } ids
+   * @param note        optional message (e.g. "You need 40 more coins")
+   * @param inventory   the current difficulty's locker (only needed for the Power-ups tab)
    * Stadium/floor tiles are only rebuilt when the tab changes, because main.js
    * then has to draw their pictures again (see lookCanvases()). Returns true
    * when it rebuilt them.
    */
-  renderCustomize(tab, wallet, look, note = null) {
+  renderCustomize(tab, wallet, look, note = null, inventory = null) {
     const e = this.el;
     e.shopCoins.textContent = wallet.balance.toLocaleString();
     showMessage(e.shopNote, note);
@@ -406,11 +446,22 @@ export class UI {
       btn.classList.toggle('selected', btn.dataset.lookTab === tab);
       btn.setAttribute('aria-selected', btn.dataset.lookTab === tab);
     });
-    e.looksPanel.classList.toggle('hidden', tab === 'ball');
+    e.looksPanel.classList.toggle('hidden', tab !== 'stadium' && tab !== 'floor');
     e.ballsPanel.classList.toggle('hidden', tab !== 'ball');
+    e.powerupsPanel.classList.toggle('hidden', tab !== 'powerups');
     if (tab === 'ball') {
       e.shopList.innerHTML = STYLE_GROUPS.map(([title, ids]) =>
         `<h2 class="section-title">${title}</h2><div class="shop-list">${ids.map((id) => shopCard(id, wallet)).join('')}</div>`
+      ).join('');
+      return false;
+    }
+    if (tab === 'powerups') {
+      e.powerupLockerName.textContent = inventory.difficultyId[0].toUpperCase() + inventory.difficultyId.slice(1);
+      e.powerupList.innerHTML = [
+        ['Specialty balls', BALL_IDS],
+        ['Energy drinks', DRINK_IDS],
+      ].map(([title, ids]) =>
+        `<h2 class="section-title">${title}</h2><div class="shop-list">${ids.map((id) => powerupCard(id, wallet, inventory)).join('')}</div>`
       ).join('');
       return false;
     }
@@ -824,6 +875,29 @@ function shopCard(id, wallet) {
     ${ballHTML}
     <span class="shop-name">${style.name}</span>
     <span class="shop-price">${status}</span>
+  </button>`;
+}
+
+/** A specialty ball or energy drink on the Power-ups tab: buy one with coins. */
+function powerupCard(id, wallet, inventory) {
+  const item = ITEMS[id];
+  const count = inventory.count(id);
+  if (item.comingSoon) {
+    return `<div class="shop-card powerup-card locked" title="${item.desc}">
+      ${itemIcon(id)}
+      <span class="shop-name">${item.name}</span>
+      <span class="powerup-desc">${item.desc}</span>
+      <span class="powerup-owned">×${count}</span>
+      <span class="shop-price">SOON</span>
+    </div>`;
+  }
+  const tooMuch = wallet.balance < item.price;
+  return `<button type="button" class="shop-card powerup-card${tooMuch ? ' locked' : ''}" data-powerup="${id}" title="${item.desc}">
+    ${itemIcon(id)}
+    <span class="shop-name">${item.name}</span>
+    <span class="powerup-desc">${item.desc}</span>
+    <span class="powerup-owned">×${count}</span>
+    <span class="shop-price"><span class="mini-coin" aria-hidden="true"></span>${item.price.toLocaleString()}</span>
   </button>`;
 }
 
