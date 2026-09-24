@@ -20,7 +20,7 @@
  */
 import { CONFIG, FX } from './config.js';
 import { fitCamera, project } from './camera.js';
-import { Ball } from './ball.js';
+import { Ball, drawBallIcon } from './ball.js';
 import { Hoop } from './hoop.js';
 import { stepBall, aimShot } from './physics.js';
 import { SwipeInput } from './input.js';
@@ -308,6 +308,30 @@ function drawLookPictures(previewOnly = false) {
     previewHoop.drawFront(c);
   }
   fitCamera(view.width, view.height, hoop.baseZ); // back to the game's camera
+}
+
+/** Spin the Balls tab's textured preview tiles: one turn every 3.2s, only while it's open. */
+function drawShopBalls(time) {
+  const canvases = ui.shopCanvases();
+  if (!canvases.length) return;
+  const dpr = Math.min(view.dpr, CONFIG.courtPreviewPixelRatio);
+  const spin = -(time / 3.2) * (Math.PI * 2);
+  for (const c of canvases) {
+    const w = c.clientWidth;
+    const h = c.clientHeight;
+    if (!w || !h) continue;
+    const pw = Math.round(w * dpr);
+    const ph = Math.round(h * dpr);
+    if (c.width !== pw || c.height !== ph) {
+      c.width = pw;
+      c.height = ph;
+    }
+    const c2d = c.getContext('2d');
+    c2d.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c2d.clearRect(0, 0, w, h);
+    const r = (Math.min(w, h) / 2) * 0.775; // the ball fills most of the tile, glow gets a little room
+    drawBallIcon(c2d, w / 2, h / 2, r, c.dataset.ballIcon, spin);
+  }
 }
 
 window.addEventListener('resize', resize);
@@ -1312,6 +1336,8 @@ function render(time) {
   ctx.restore();
 
   if (FX) effects.drawPost(ctx, width, height);
+
+  if (ui.isShowing('customize') && game.customizeTab === 'ball') drawShopBalls(time);
 }
 
 let lastTime = performance.now();

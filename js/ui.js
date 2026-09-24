@@ -15,7 +15,7 @@
  */
 import { CONFIG } from './config.js';
 import { ITEMS, BALL_IDS, DRINK_IDS } from './items.js';
-import { BALL_STYLES, STYLE_IDS, CATALOG } from './wallet.js';
+import { BALL_STYLES, STYLE_GROUPS, CATALOG } from './wallet.js';
 import { COURT_THEMES, FLOORS, courtColor, floorColor } from './court.js';
 
 const $ = (id) => document.getElementById(id);
@@ -409,7 +409,9 @@ export class UI {
     e.looksPanel.classList.toggle('hidden', tab === 'ball');
     e.ballsPanel.classList.toggle('hidden', tab !== 'ball');
     if (tab === 'ball') {
-      e.shopList.innerHTML = STYLE_IDS.map((id) => shopCard(id, wallet)).join('');
+      e.shopList.innerHTML = STYLE_GROUPS.map(([title, ids]) =>
+        `<h2 class="section-title">${title}</h2><div class="shop-list">${ids.map((id) => shopCard(id, wallet)).join('')}</div>`
+      ).join('');
       return false;
     }
 
@@ -449,6 +451,12 @@ export class UI {
     const preview = [this.el.courtPreview];
     if (previewOnly || this.el.looksPanel.classList.contains('hidden')) return preview;
     return [...preview, ...this.el.lookList.querySelectorAll('canvas')];
+  }
+
+  /** The Balls tab's spinning preview canvases (textured styles only), or none while it's hidden. */
+  shopCanvases() {
+    if (this.el.ballsPanel.classList.contains('hidden')) return [];
+    return this.el.shopList.querySelectorAll('canvas[data-ball-icon]');
   }
 
   /** Fill the Hot Hand hub's missions and locker. */
@@ -800,12 +808,20 @@ function shopCard(id, wallet) {
   const inUse = wallet.equipped === id;
   const tooMuch = !owned && wallet.balance < style.price;
   const status = inUse ? '✓ IN USE' : owned ? 'OWNED · TAP TO USE' : `<span class="mini-coin" aria-hidden="true"></span>${style.price.toLocaleString()}`;
-  const [light, mid, edge] = style.colors ?? ['#ffb3b3', '#ff3d3d', '#6b0000']; // rainbow cycles in CSS
-  const colors = `--light:${light};--mid:${mid};--edge:${edge};--seam:${style.seam}`;
   const classes = ['shop-card', inUse && 'in-use', owned && 'owned', tooMuch && 'locked'].filter(Boolean).join(' ');
-  const ballClasses = ['shop-ball', style.glow && 'glow', style.rainbow && 'rainbow'].filter(Boolean).join(' ');
+  // Novelty styles get a spinning canvas preview (drawn by drawShopBalls() in
+  // main.js). The classic looks keep the cheap CSS-only ball.
+  let ballHTML;
+  if (style.texture) {
+    ballHTML = `<canvas class="shop-ball-canvas" data-ball-icon="${id}" aria-hidden="true"></canvas>`;
+  } else {
+    const [light, mid, edge] = style.colors ?? ['#ffb3b3', '#ff3d3d', '#6b0000']; // rainbow cycles in CSS
+    const colors = `--light:${light};--mid:${mid};--edge:${edge};--seam:${style.seam}`;
+    const ballClasses = ['shop-ball', style.glow && 'glow', style.rainbow && 'rainbow'].filter(Boolean).join(' ');
+    ballHTML = `<span class="${ballClasses}" style="${colors}" aria-hidden="true"></span>`;
+  }
   return `<button type="button" class="${classes}" data-style="${id}">
-    <span class="${ballClasses}" style="${colors}" aria-hidden="true"></span>
+    ${ballHTML}
     <span class="shop-name">${style.name}</span>
     <span class="shop-price">${status}</span>
   </button>`;

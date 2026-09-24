@@ -12,6 +12,7 @@
 import { CONFIG, FX } from './config.js';
 import { project, projectHoop } from './camera.js';
 import { BALL_STYLES } from './wallet.js';
+import { FRAMES, textureFrame } from './ball-textures.js';
 
 const TAU = Math.PI * 2;
 
@@ -193,29 +194,52 @@ export class Ball {
     } else if (style.glow) {
       ctx.shadowColor = mid;
       ctx.shadowBlur = r * 0.45;
+      // A solid circle of the glow color first, so the shadow has something
+      // opaque to cast from under a texture (textures fade out at the edge).
+      ctx.fillStyle = mid;
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.98, 0, TAU);
+      ctx.fill();
     }
-
-    // Base ball with a light-to-dark gradient for a round look
-    const base = ctx.createRadialGradient(-r * 0.35, -r * 0.4, r * 0.1, 0, 0, r);
-    base.addColorStop(0, light);
-    base.addColorStop(0.55, mid);
-    base.addColorStop(1, edge);
-    ctx.fillStyle = base;
-    ctx.beginPath();
-    ctx.arc(0, 0, r, 0, TAU);
-    ctx.fill();
     ctx.shadowBlur = 0;
 
-    // Seams (clipped to the ball)
-    ctx.save();
-    ctx.clip();
-    ctx.rotate(Math.max(-0.5, Math.min(0.5, this.vx * 0.08))); // lean with sideways motion
-    this.drawSeams(ctx, r, this.skin ? SEAM_COLOR : style.seam);
-    ctx.restore();
+    // A quantized spin frame for textured balls (0..FRAMES-1), so a whole
+    // frame is reused every time the ball comes back around.
+    const frame = Math.floor(((((-this.spin / TAU) % 1) + 1) % 1) * FRAMES) % FRAMES;
 
-    // Edge shading + a small shine on top for depth
+    if (style.texture) {
+      // Round to the nearest 8px so we don't build dozens of cached sizes per shot.
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const S = Math.max(8, Math.round((r * 2 * dpr) / 8) * 8);
+      ctx.drawImage(textureFrame(this.style, S, frame), -r, -r, r * 2, r * 2);
+    } else {
+      // Base ball with a light-to-dark gradient for a round look
+      const base = ctx.createRadialGradient(-r * 0.35, -r * 0.4, r * 0.1, 0, 0, r);
+      base.addColorStop(0, light);
+      base.addColorStop(0.55, mid);
+      base.addColorStop(1, edge);
+      ctx.fillStyle = base;
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, TAU);
+      ctx.fill();
+    }
+
+    // Seams (clipped to the ball). `seam: null` (novelty balls) skips them.
+    const seamColor = this.skin ? SEAM_COLOR : style.seam;
+    if (seamColor) {
+      ctx.save();
+      ctx.clip();
+      ctx.rotate(Math.max(-0.5, Math.min(0.5, this.vx * 0.08))); // lean with sideways motion
+      // For a textured ball, use the same quantized spin as the texture frame
+      // so the seams (Chrome) don't slide over it.
+      this.drawSeams(ctx, r, seamColor, style.texture ? -(frame / FRAMES) * TAU : this.spin);
+      ctx.restore();
+    }
+
+    // Edge shading + a small shine on top for depth. The texture already has
+    // its own specular highlight, so keep this one subtler on textured balls.
     const shade = ctx.createRadialGradient(-r * 0.3, -r * 0.35, r * 0.2, 0, 0, r);
-    shade.addColorStop(0, 'rgba(255,255,255,0.18)');
+    shade.addColorStop(0, style.texture ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.18)');
     shade.addColorStop(0.6, 'rgba(0,0,0,0)');
     shade.addColorStop(1, 'rgba(0,0,0,0.35)');
     ctx.fillStyle = shade;
@@ -265,35 +289,107 @@ export class Ball {
   }
 
   /** Rotate the 3D seam circles by the current spin and draw the visible half. */
-  drawSeams(ctx, r, color = SEAM_COLOR) {
-    const cs = Math.cos(this.spin);
-    const ss = Math.sin(this.spin);
-    const cy = Math.cos(VIEW_YAW);
-    const sy = Math.sin(VIEW_YAW);
+  drawSeams(ctx, r, color = SEAM_COLOR, spin = this.spin) {
+    drawSeamShape(ctx, r, spin, color);
+  }
+}
 
-    ctx.strokeStyle = color;
-    ctx.lineWidth = Math.max(1, r * 0.075);
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    for (const seam of SEAMS) {
-      let penDown = false;
-      for (const [x0, y0, z0] of seam) {
-        // Spin around the x axis (backspin)...
-        const y1 = y0 * cs - z0 * ss;
-        const z1 = y0 * ss + z0 * cs;
-        // ...then turn slightly around the y axis
-        const x2 = x0 * cy + z1 * sy;
-        const z2 = -x0 * sy + z1 * cy;
-        // Only draw the side facing the camera (negative z)
-        if (z2 < 0.05) {
-          if (penDown) ctx.lineTo(x2 * r, -y1 * r);
-          else ctx.moveTo(x2 * r, -y1 * r);
-          penDown = true;
-        } else {
-          penDown = false;
-        }
+/**
+ * Rotate the 3D seam circles by `spin` and draw the visible half. A standalone
+ * function (not a Ball method) so drawBallIcon() below can use it too.
+ */
+function drawSeamShape(ctx, r, spin, color) {
+  const cs = Math.cos(spin);
+  const ss = Math.sin(spin);
+  const cy = Math.cos(VIEW_YAW);
+  const sy = Math.sin(VIEW_YAW);
+
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(1, r * 0.075);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  for (const seam of SEAMS) {
+    let penDown = false;
+    for (const [x0, y0, z0] of seam) {
+      // Spin around the x axis (backspin)...
+      const y1 = y0 * cs - z0 * ss;
+      const z1 = y0 * ss + z0 * cs;
+      // ...then turn slightly around the y axis
+      const x2 = x0 * cy + z1 * sy;
+      const z2 = -x0 * sy + z1 * cy;
+      // Only draw the side facing the camera (negative z)
+      if (z2 < 0.05) {
+        if (penDown) ctx.lineTo(x2 * r, -y1 * r);
+        else ctx.moveTo(x2 * r, -y1 * r);
+        penDown = true;
+      } else {
+        penDown = false;
       }
     }
-    ctx.stroke();
   }
+  ctx.stroke();
+}
+
+/**
+ * Draw a ball with no physics behind it — used for the Shop's spinning
+ * preview tiles. `id` is a BALL_STYLES key, `spin` its current rotation.
+ */
+export function drawBallIcon(ctx, cx, cy, r, id, spin) {
+  const style = BALL_STYLES[id] ?? BALL_STYLES.classic;
+  let light, mid, edge;
+  if (style.rainbow) {
+    const hue = (performance.now() / 1000 * 90) % 360;
+    [light, mid, edge] = [`hsl(${hue}, 100%, 80%)`, `hsl(${hue}, 90%, 55%)`, `hsl(${hue}, 80%, 25%)`];
+  } else {
+    [light, mid, edge] = style.colors ?? SKINS.normal;
+  }
+
+  ctx.save();
+  ctx.translate(cx, cy);
+
+  if (style.glow) {
+    ctx.shadowColor = mid;
+    ctx.shadowBlur = r * 0.45;
+    ctx.fillStyle = mid;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.98, 0, TAU);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+
+  const frame = Math.floor(((((-spin / TAU) % 1) + 1) % 1) * FRAMES) % FRAMES;
+  if (style.texture) {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const S = Math.max(8, Math.round((r * 2 * dpr) / 8) * 8);
+    ctx.drawImage(textureFrame(id, S, frame), -r, -r, r * 2, r * 2);
+  } else {
+    const base = ctx.createRadialGradient(-r * 0.35, -r * 0.4, r * 0.1, 0, 0, r);
+    base.addColorStop(0, light);
+    base.addColorStop(0.55, mid);
+    base.addColorStop(1, edge);
+    ctx.fillStyle = base;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, TAU);
+    ctx.fill();
+  }
+
+  if (style.seam) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, TAU);
+    ctx.clip();
+    drawSeamShape(ctx, r, style.texture ? -(frame / FRAMES) * TAU : spin, style.seam);
+    ctx.restore();
+  }
+
+  const shade = ctx.createRadialGradient(-r * 0.3, -r * 0.35, r * 0.2, 0, 0, r);
+  shade.addColorStop(0, style.texture ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.18)');
+  shade.addColorStop(0.6, 'rgba(0,0,0,0)');
+  shade.addColorStop(1, 'rgba(0,0,0,0.35)');
+  ctx.fillStyle = shade;
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, TAU);
+  ctx.fill();
+
+  ctx.restore();
 }

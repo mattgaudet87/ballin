@@ -1733,6 +1733,18 @@ body {
   animation: rainbow 4s linear infinite;
 }
 
+/* A textured novelty ball: drawn on canvas (see drawShopBalls() in main.js),
+   sized bigger than the ball itself (62px) so its glow has room to show. */
+.shop-ball-canvas {
+  width: 80px;
+  height: 80px;
+  margin: -9px;
+}
+
+.shop-card.locked .shop-ball-canvas {
+  opacity: 0.55;
+}
+
 @keyframes rainbow {
   to { filter: hue-rotate(360deg); }
 }
