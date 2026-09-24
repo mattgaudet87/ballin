@@ -54,7 +54,7 @@ export const BALL_STYLES = {
   eightball: { name: '8-Ball', price: 800, tag: 'cool', texture: 'eightball', seam: null, colors: ['#6a6a70', '#1a1a1e', '#050506'] },
   beach: { name: 'Beach Ball', price: 250, tag: 'funny', texture: 'beach', seam: null, colors: ['#ffffff', '#ff4a3a', '#8a1a10'] },
   watermelon: { name: 'Watermelon', price: 350, tag: 'funny', texture: 'watermelon', seam: null, colors: ['#8ad07a', '#3f8f3a', '#123a14'] },
-  eyeball: { name: 'Eyeball', price: 666, tag: 'funny', texture: 'eyeball', seam: null, colors: ['#ffffff', '#f0ebe2', '#b8a898'] },
+  eyeball: { name: 'Eyeball', price: 600, tag: 'funny', texture: 'eyeball', seam: null, colors: ['#ffffff', '#f0ebe2', '#b8a898'] },
   golf: { name: 'Golf Ball', price: 200, tag: 'funny', texture: 'golf', seam: null, colors: ['#ffffff', '#ecece6', '#9a9a94'] },
 };
 
