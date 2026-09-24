@@ -4,14 +4,14 @@
  * Eye candy that doesn't affect gameplay:
  *   - particles (confetti bursts, fire trail)
  *   - floating text ("+2", "SWISH!", "ON FIRE!")
- *   - screen shake
- *   - the orange glow around the screen edges while on fire
+ *
+ * No screen flash, screen shake or pulsing fire glow — the game stays calm
+ * and low-stim on purpose, with no setting to turn that off.
  *
  * Everything here works in SCREEN pixels, not world meters.
  */
 
-import { FX, FX_FONT, CONFIG } from './config.js';
-import { loadBool, saveBool } from './storage.js';
+import { FX, FX_FONT } from './config.js';
 
 const TAU = Math.PI * 2;
 const TEXT_FONT = '-apple-system, "SF Pro Display", "Helvetica Neue", Arial, sans-serif';
@@ -24,28 +24,7 @@ export class Effects {
     this.flames = []; // kept separate so they can be drawn BEHIND the ball
     this.texts = [];
     this.rings = []; // FX: shockwave rings at the rim on a make
-    this.flashes = []; // FX: screen flash + rim bloom on a make
     this.grain = null; // FX: film grain tile, made on first use
-    this.shakeAmount = 0;
-    // Low Stim Mode: turns off screen flash, screen shake and the pulsing
-    // on-fire edge glow, for players who want to relax without the jolts.
-    this.lowStim = loadBool(CONFIG.storageKeys.lowStim, false);
-  }
-
-  setLowStim(on) {
-    this.lowStim = !!on;
-    saveBool(CONFIG.storageKeys.lowStim, this.lowStim);
-  }
-
-  toggleLowStim() {
-    this.setLowStim(!this.lowStim);
-    return this.lowStim;
-  }
-
-  /** FX: bright additive flash and a bloom at (x, y). Skipped in Low Stim Mode. */
-  flash(x, y, strength = 0.3, color = '255, 190, 120') {
-    if (this.lowStim) return;
-    this.flashes.push({ x, y, strength, color, life: 0, maxLife: 0.35 });
   }
 
   /** FX: fast glowing sparks that draw as streaks. */
@@ -79,8 +58,6 @@ export class Effects {
     this.flames.length = 0;
     this.texts.length = 0;
     this.rings.length = 0;
-    this.flashes.length = 0;
-    this.shakeAmount = 0;
   }
 
   /** A burst of confetti-like particles flying outward. */
@@ -127,18 +104,6 @@ export class Effects {
     this.texts.push({ x, y, text, color, size, life: 0, maxLife: life });
   }
 
-  /** Screen shake. Skipped in Low Stim Mode. */
-  shake(amount) {
-    if (this.lowStim) return;
-    this.shakeAmount = Math.max(this.shakeAmount, amount);
-  }
-
-  /** Current screen-shake offset in pixels. */
-  getShake() {
-    if (this.shakeAmount < 0.1) return [0, 0];
-    return [random(-1, 1) * this.shakeAmount, random(-1, 1) * this.shakeAmount];
-  }
-
   update(dt) {
     for (const p of [...this.particles, ...this.flames]) {
       p.life += dt;
@@ -149,15 +114,11 @@ export class Effects {
     }
     for (const r of this.rings) r.life += dt;
     this.rings = this.rings.filter((r) => r.life < r.maxLife);
-    for (const f of this.flashes) f.life += dt;
-    this.flashes = this.flashes.filter((f) => f.life < f.maxLife);
     this.particles = this.particles.filter((p) => p.life < p.maxLife);
     this.flames = this.flames.filter((p) => p.life < p.maxLife);
 
     for (const t of this.texts) t.life += dt;
     this.texts = this.texts.filter((t) => t.life < t.maxLife);
-
-    this.shakeAmount *= Math.pow(0.001, dt); // fade the shake out quickly
   }
 
   /** Fire trail — main.js draws this just before the ball. */
@@ -280,26 +241,8 @@ export class Effects {
     ctx.restore();
   }
 
-  /** FX: flashes, then film grain. Drawn last, over everything. */
+  /** FX: film grain. Drawn last, over everything. */
   drawPost(ctx, width, height) {
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    for (const f of this.flashes) {
-      const k = 1 - f.life / f.maxLife;
-      ctx.globalAlpha = f.strength * k * k;
-      ctx.fillStyle = `rgb(${f.color})`;
-      ctx.fillRect(0, 0, width, height);
-      const r = width * (0.35 + (1 - k) * 0.4);
-      const bloom = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, r);
-      bloom.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
-      bloom.addColorStop(0.3, `rgba(${f.color}, 0.5)`);
-      bloom.addColorStop(1, `rgba(${f.color}, 0)`);
-      ctx.globalAlpha = k;
-      ctx.fillStyle = bloom;
-      ctx.fillRect(f.x - r, f.y - r, r * 2, r * 2);
-    }
-    ctx.restore();
-
     if (!this.grain) {
       const c = document.createElement('canvas');
       c.width = c.height = 128;
@@ -320,16 +263,5 @@ export class Effects {
     ctx.fillStyle = this.grain;
     ctx.fillRect(0, 0, width + 64, height + 64);
     ctx.restore();
-  }
-
-  /** Pulsing orange glow around the edges of the screen. Skipped in Low Stim Mode. */
-  drawFireGlow(ctx, width, height, time) {
-    if (this.lowStim) return;
-    const pulse = 0.28 + Math.sin(time * 6) * 0.07;
-    const g = ctx.createRadialGradient(width / 2, height / 2, Math.min(width, height) * 0.35, width / 2, height / 2, Math.max(width, height) * 0.75);
-    g.addColorStop(0, 'rgba(255, 90, 20, 0)');
-    g.addColorStop(1, `rgba(255, 90, 20, ${pulse})`);
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, width, height);
   }
 }

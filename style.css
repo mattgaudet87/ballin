@@ -189,32 +189,6 @@ body {
   color: var(--muted);
 }
 
-/* --- Low Stim Mode button (sits just left of the mute button) ------------- */
-
-#lowstim-btn {
-  position: absolute;
-  top: calc(var(--safe-top) + 14px);
-  right: 66px;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--text);
-  font-size: 20px;
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  z-index: 20;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-}
-
-#lowstim-btn.active {
-  background: rgba(94, 224, 90, 0.25);
-  border-color: rgba(94, 224, 90, 0.5);
-}
-
 /* LEAVE / END button, just under the mute button */
 #leave-btn {
   position: absolute;

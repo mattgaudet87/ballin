@@ -382,10 +382,8 @@ ui.onCustomizeTab((tab) => showCustomizeTab(tab));
 ui.onCustomizeItem(customizeItem);
 ui.onItem(useItem);
 ui.onMute(() => ui.setMuted(audio.toggleMute()));
-ui.onLowStim(() => ui.setLowStim(effects.toggleLowStim()));
 ui.onLeave(leaveGame);
 ui.setMuted(audio.muted);
-ui.setLowStim(effects.lowStim);
 
 /** Launch the ball based on the player's swipe, then reload right away. */
 function shoot(swipe) {
@@ -1129,10 +1127,7 @@ function onMake(b, swish) {
   if (FX) {
     effects.ring(rim.x, rim.y, hoop.radius * rim.scale, swish ? '#7ee8ff' : colors[0]);
     effects.sparks(rim.x, rim.y, swish ? ['#ffffff', '#7ee8ff'] : ['#fff1a8', '#ffd23f', '#ff9a1f'], big ? 48 : 26);
-    effects.flash(rim.x, rim.y, big || onFireNow ? 0.175 : swish ? 0.11 : 0.07, swish ? '150, 230, 255' : '255, 190, 120');
-    effects.shake(big ? 10 : swish ? 5 : 3);
   }
-  if (big) effects.shake(6);
   hoop.onScore(swish ? 1.3 : 1);
   audio.score(game.streak);
 
@@ -1144,7 +1139,6 @@ function onMake(b, swish) {
   if (shot.coin) grabCoin(shot, rim);
   if (onFireNow && game.streak === G.fireStreak) {
     audio.fire();
-    effects.shake(8);
     effects.floatText(view.width / 2, view.height * 0.5, 'ON FIRE!', { color: '#ff8a1f', size: 54, life: 1.4 });
   }
   if (rule && hoopStatBefore < rule.startAt && game[rule.stat] >= rule.startAt) {
@@ -1286,9 +1280,6 @@ function render(time) {
   ctx.fillRect(0, 0, width, height);
 
   ctx.save();
-  const [shakeX, shakeY] = effects.getShake();
-  ctx.translate(shakeX, shakeY);
-
   ctx.drawImage(courtCanvas, 0, 0, width, height);
   if (FX) effects.drawMotes(ctx, width, height, time, isOnFire(), courtMote(courtId()));
   for (const b of flying) b.drawShadow(ctx);
@@ -1320,7 +1311,6 @@ function render(time) {
   effects.draw(ctx);
   ctx.restore();
 
-  if (onFire) effects.drawFireGlow(ctx, width, height, time);
   if (FX) effects.drawPost(ctx, width, height);
 }
 
