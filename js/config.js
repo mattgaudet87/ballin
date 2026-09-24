@@ -126,6 +126,10 @@ export const CONFIG = {
   maxPixelRatio: 3, // cap for Retina rendering (higher = sharper but slower)
   courtPreviewPixelRatio: 2, // same, for the stadium/floor pictures on the Customize screen
 
+  music: {
+    volume: 0.35, // background music plays quieter than the sound effects
+  },
+
   storageKeys: {
     best: 'ballin.best.', // + mode + '.' + difficulty, e.g. 'ballin.best.blitz.hard'
     baskets: 'ballin.baskets.', // + mode + '.' + difficulty: lifetime baskets made
@@ -135,6 +139,7 @@ export const CONFIG = {
     playerNames: 'ballin.playerNames',
     oldBest: 'ballin.bestScore', // from the very first version (Blitz on Hard)
     muted: 'ballin.muted',
+    musicMuted: 'ballin.musicMuted',
     inventory: 'ballin.inventory',
     missions: 'ballin.missions',
     wallet: 'ballin.wallet', // coins and ball styles (wallet.js)

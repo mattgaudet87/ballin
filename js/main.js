@@ -26,6 +26,7 @@ import { stepBall, aimShot } from './physics.js';
 import { SwipeInput } from './input.js';
 import { UI } from './ui.js';
 import { SoundFX } from './audio.js';
+import { MusicPlayer } from './music.js';
 import { Effects } from './effects.js';
 import { drawCourt, courtTheme, courtMote, COURT_THEMES, FLOORS } from './court.js';
 import { loadNumber, saveNumber, loadJSON, saveJSON } from './storage.js';
@@ -64,6 +65,7 @@ const hoop = new Hoop();
 const previewHoop = new Hoop(); // a still hoop for the Customize screen's pictures
 const effects = new Effects();
 const audio = new SoundFX();
+const music = new MusicPlayer();
 const ui = new UI();
 // (the locker is picked once the difficulty is known, in applyDifficulty)
 const inventory = new Inventory();
@@ -378,8 +380,11 @@ document.addEventListener('gesturestart', (e) => e.preventDefault()); // iOS pin
 document.addEventListener('dblclick', (e) => e.preventDefault());
 document.addEventListener('contextmenu', (e) => e.preventDefault());
 
-// Browsers only allow sound after a tap, so unlock audio on the first touch.
-window.addEventListener('pointerdown', () => audio.unlock());
+// Browsers only allow sound after a tap, so unlock audio (and start the music) on the first touch.
+window.addEventListener('pointerdown', () => {
+  audio.unlock();
+  music.unlock();
+});
 
 // ---------------------------------------------------------------------------
 // Input
@@ -428,8 +433,10 @@ ui.onCustomizeTab((tab) => showCustomizeTab(tab));
 ui.onCustomizeItem(customizeItem);
 ui.onItem(useItem);
 ui.onMute(() => ui.setMuted(audio.toggleMute()));
+ui.onMusicMute(() => ui.setMusicMuted(music.toggleMute()));
 ui.onLeave(leaveGame);
 ui.setMuted(audio.muted);
+ui.setMusicMuted(music.muted);
 
 /** Launch the ball based on the player's swipe, then reload right away. */
 function shoot(swipe) {
@@ -1396,6 +1403,6 @@ syncScores();
 
 // Handy for debugging in the browser console, e.g. ballin.inventory.add('gold', 5) or ballin.wallet.add(500)
 window.ballin = {
-  game, hoop, inventory, missions, online, wallet, CONFIG, flying,
+  game, hoop, inventory, missions, online, wallet, music, CONFIG, flying,
   get ball() { return ball; }, // the ball waiting at the bottom (a new one after every shot)
 };

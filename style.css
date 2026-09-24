@@ -189,6 +189,37 @@ body {
   color: var(--muted);
 }
 
+/* Music mute button, sits just to the left of the sound mute button */
+#music-btn {
+  position: absolute;
+  top: calc(var(--safe-top) + 14px);
+  right: 66px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  z-index: 20;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+#music-btn .slash {
+  display: none;
+}
+
+#music-btn.muted .slash {
+  display: inline;
+}
+
+#music-btn.muted {
+  color: var(--muted);
+}
+
 /* LEAVE / END button, just under the mute button */
 #leave-btn {
   position: absolute;

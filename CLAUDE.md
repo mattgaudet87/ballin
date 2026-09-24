@@ -40,6 +40,7 @@ api/                   Vercel serverless functions (server side of online play)
   challenges.js        /api/challenges: list, create, finish (winner gets CONFIG.coins.onlineWin), decline
 tools/dev.mjs          Local server: static files + api/ (same as Vercel)
 icons/                 App icons (PNG 180/192/512 + SVG favicon)
+music/                 Background music (mp3 files), listed in js/music.js
 tools/make_icons.py    Regenerates the PNG icons (pure Python, no libraries)
 js/
   config.js    Tunable numbers shared by everything: world sizes, camera, bounciness, shot feel, shared scoring rules, coins, timings, storage keys.
@@ -65,6 +66,8 @@ js/
                Blitz with Friends (online + Pass and play button), Pass and play setup, friend page, handoff/results,
                game over, popups (reward, pause), HUD, trays
   audio.js     Web Audio sound effects (synthesized, no files) + mute (saved to localStorage)
+  music.js     Background music: shuffles the mp3 files in music/ through an <audio> element, own mute
+               (saved to localStorage), separate from audio.js's sound-effect mute
   effects.js   Particles, fire trail, floating text (screen space). No screen flash, screen shake or
                pulsing fire glow — the game stays calm and low-stim on purpose
   storage.js   try/catch-wrapped localStorage helpers (numbers, booleans, JSON)
@@ -253,6 +256,7 @@ js/
   dependencies), calls `fitCamera(375, 812)`, then loops `aimShot()` and `stepBall()`
   over a grid of swipe speeds and angles.
 - **New sound:** add a method to `SoundFX` in audio.js built from `tone()`/`noise()`, and call it from main.js.
+- **New music track:** drop the mp3 in music/ and add its filename to `TRACKS` in music.js.
 - **New scoring rule or bonus:** add it in `onMake()` / `onMiss()` in main.js, and put any numbers in `CONFIG.game`.
 - **New physics event** (e.g. hitting the pole): push `{ type: 'pole', speed }` in `stepBall()`,
   then handle it in the event loop inside `updateFlyingBall()`.

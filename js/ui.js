@@ -8,7 +8,7 @@
  *     handoff, friends results, game over
  *   - the reward popup and the pause popup (LEAVE mid-game: RESUME or FORFEIT)
  *   - the in-game HUD, "swipe up" hint and power-up trays
- *   - the mute button
+ *   - the sound and music mute buttons
  *
  * The HTML skeleton lives in index.html and the styling in style.css. This
  * file shows/hides pieces and fills in their content. It never changes game
@@ -104,6 +104,7 @@ export class UI {
       ballTray: $('ball-tray'),
       drinkTray: $('drink-tray'),
       muteBtn: $('mute-btn'),
+      musicBtn: $('music-btn'),
       leaveBtn: $('leave-btn'),
       difficultyBtn: $('difficulty-btn'),
       difficultyPopup: $('difficulty-popup'),
@@ -294,6 +295,10 @@ export class UI {
     this.el.muteBtn.addEventListener('click', callback);
   }
 
+  onMusicMute(callback) {
+    this.el.musicBtn.addEventListener('click', callback);
+  }
+
   /** The LEAVE button in the corner during a game (END in Free Throw). */
   onLeave(callback) {
     this.el.leaveBtn.addEventListener('click', callback);
@@ -312,6 +317,11 @@ export class UI {
   setMuted(muted) {
     this.el.muteBtn.classList.toggle('muted', muted);
     this.el.muteBtn.setAttribute('aria-label', muted ? 'Unmute sound' : 'Mute sound');
+  }
+
+  setMusicMuted(muted) {
+    this.el.musicBtn.classList.toggle('muted', muted);
+    this.el.musicBtn.setAttribute('aria-label', muted ? 'Unmute music' : 'Mute music');
   }
 
   // --- Screens ---------------------------------------------------------------------
