@@ -118,8 +118,6 @@ export class UI {
       modeScreenBestLabel: $('mode-screen-best-label'),
       modeScreenLifetime: $('mode-screen-lifetime'),
       modeScreenPlayBtn: $('mode-screen-play-btn'),
-      tapStart: $('tap-start'),
-      tapStartMode: $('tap-start-mode'),
       lockerTitle: $('locker-title'),
       gameOverNote: $('gameover-note'),
       againBtn: $('again-btn'),
@@ -290,11 +288,6 @@ export class UI {
         if (button) handlers[button.dataset.action](button.dataset.value);
       });
     }
-  }
-
-  /** The "Tap to start" screen was tapped. */
-  onTapToStart(callback) {
-    this.el.tapStart.addEventListener('click', callback);
   }
 
   onMute(callback) {
@@ -721,18 +714,7 @@ export class UI {
     this.shown = {};
   }
 
-  /** Show the "Tap to start" screen over the court, e.g. "Hot Hand · Easy". */
-  showTapToStart(label) {
-    this.el.tapStartMode.textContent = label.toUpperCase();
-    show(this.el.tapStart);
-  }
-
-  hideTapToStart() {
-    hide(this.el.tapStart);
-  }
-
   hideGameHUD() {
-    hide(this.el.tapStart);
     hide(this.el.hud);
     hide(this.el.hint);
     hide(this.el.ballTray);

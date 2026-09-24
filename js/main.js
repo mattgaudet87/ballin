@@ -3,7 +3,7 @@
  * ---------------------------------------------------------------------------
  * The "conductor" of the game. It:
  *   1. sets up the canvas (sharp on Retina screens) and all the game objects
- *   2. runs the game-state machine: 'menu' → 'waiting' (tap to start) → 'playing' → 'gameover'
+ *   2. runs the game-state machine: 'menu' → 'waiting' (ball ready, shoot it to start) → 'playing' → 'gameover'
  *   3. runs the main loop ~60 times a second: update() then render()
  *   4. applies the game RULES: scoring, streaks, on fire, the clock, power-ups,
  *      basket multipliers and missions
@@ -387,7 +387,8 @@ window.addEventListener('pointerdown', () => audio.unlock());
 
 new SwipeInput(canvas, {
   // Swipes may start anywhere in the lower half, once the ball is ready.
-  canStart: (x, y) => game.state === 'playing' && !game.paused && !timeIsUp() && !game.ending && ball.state === 'ready' && y > view.height * 0.5,
+  // 'waiting' is allowed too: shooting the first ball is what starts the game.
+  canStart: (x, y) => (game.state === 'playing' || game.state === 'waiting') && !game.paused && !timeIsUp() && !game.ending && ball.state === 'ready' && y > view.height * 0.5,
   onShoot: shoot,
 });
 
@@ -404,9 +405,7 @@ ui.onDifficultyButton(() => {
   ui.showDifficultyPopup(game.difficulty.id, (id) => changeDifficultyDuringGame(id));
 });
 ui.onFriendsStart(startMatch);
-// The handoff screen's "I'm ready" button already is the tap to start
-ui.onHandoffReady(() => startGame('friends', { tapToStart: false }));
-ui.onTapToStart(beginPlay);
+ui.onHandoffReady(() => startGame('friends'));
 ui.onRematch(() => startMatch(game.match.players.map((p) => p.name)));
 ui.onPlayAgain(() => {
   if (!game.mode.online) startGame(game.mode.id);
@@ -434,7 +433,9 @@ ui.setMuted(audio.muted);
 
 /** Launch the ball based on the player's swipe, then reload right away. */
 function shoot(swipe) {
-  if (game.state !== 'playing' || game.ending || ball.state !== 'ready') return;
+  if (game.state !== 'playing' && game.state !== 'waiting') return;
+  if (game.ending || ball.state !== 'ready') return;
+  beginPlay(); // first shot of the game: no-op if already playing
 
   // Lock in the power-ups (Hot Hand only) and basket multiplier for this ball
   const shot = game.mode.powerUps ? inventory.startShot() : { ballMultiplier: 1, greenMultiplier: 1, itemsUsed: 0 };
@@ -783,10 +784,11 @@ function challengeNote({ status, opponent, myScore, theirScore }) {
 // --- Playing -------------------------------------------------------------------
 
 /**
- * Set up a new game. No countdown: it waits on a "Tap to start" screen
- * (or starts right away with tapToStart: false).
+ * Set up a new game. No countdown and no "tap to start" screen: the ball
+ * sits ready and the clock (if any) starts the moment the player shoots it
+ * (see beginPlay(), called from shoot()).
  */
-function startGame(modeId, { tapToStart = true } = {}) {
+function startGame(modeId) {
   audio.unlock();
   const mode = MODES[modeId];
   Object.assign(game, {
@@ -817,16 +819,12 @@ function startGame(modeId, { tapToStart = true } = {}) {
   // Passing Blitz with Friends or an online challenge changes another player's
   // turn or a sent challenge, so only solo modes can switch difficulty mid-game.
   ui.showGame({ powerUps: mode.powerUps, canChangeDifficulty: !mode.passAndPlay && !mode.online });
-  const title = mode.online ? `vs ${game.challenge.opponent}` : mode.name;
-  if (tapToStart) ui.showTapToStart(`${title} · ${game.difficulty.name}`);
-  else beginPlay();
 }
 
-/** The player tapped to start: the clock (if any) starts now. */
+/** The player shot the first ball: the clock (if any) starts now. */
 function beginPlay() {
   if (game.state !== 'waiting') return;
   game.state = 'playing';
-  ui.hideTapToStart();
   audio.unlock();
   audio.start();
 }
@@ -1266,7 +1264,7 @@ function update(dt) {
     ui.updateHUD(hudInfo());
     if (game.mode.powerUps) ui.renderTrays(inventory, ball.state !== 'ready');
   }
-  ui.setHint(game.state === 'playing' && game.shots === 0 && ball.state === 'ready');
+  ui.setHint((game.state === 'playing' || game.state === 'waiting') && game.shots === 0 && ball.state === 'ready');
 }
 
 /** What the in-game HUD shows, depending on the mode. */
