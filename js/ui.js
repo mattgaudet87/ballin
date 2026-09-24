@@ -7,7 +7,7 @@
  *     Pass and play setup (names), a friend's page, pass-the-phone handoff, friends results, game over
  *   - the reward popup
  *   - the in-game HUD, "swipe up" hint and power-up trays
- *   - the mute button
+ *   - the mute button and the Low Stim Mode toggle
  *
  * The HTML skeleton lives in index.html and the styling in style.css. This
  * file shows/hides pieces and fills in their content. It never changes game
@@ -100,6 +100,7 @@ export class UI {
       ballTray: $('ball-tray'),
       drinkTray: $('drink-tray'),
       muteBtn: $('mute-btn'),
+      lowStimBtn: $('lowstim-btn'),
       leaveBtn: $('leave-btn'),
       difficultyBtn: $('difficulty-btn'),
       difficultyPopup: $('difficulty-popup'),
@@ -288,6 +289,11 @@ export class UI {
     this.el.muteBtn.addEventListener('click', callback);
   }
 
+  /** The Low Stim Mode toggle button (top right, next to mute). */
+  onLowStim(callback) {
+    this.el.lowStimBtn.addEventListener('click', callback);
+  }
+
   /** The LEAVE button in the corner during a game (END in Free Throw). */
   onLeave(callback) {
     this.el.leaveBtn.addEventListener('click', callback);
@@ -306,6 +312,11 @@ export class UI {
   setMuted(muted) {
     this.el.muteBtn.classList.toggle('muted', muted);
     this.el.muteBtn.setAttribute('aria-label', muted ? 'Unmute sound' : 'Mute sound');
+  }
+
+  setLowStim(on) {
+    this.el.lowStimBtn.classList.toggle('active', on);
+    this.el.lowStimBtn.setAttribute('aria-label', on ? 'Turn off Low Stim Mode' : 'Turn on Low Stim Mode');
   }
 
   // --- Screens ---------------------------------------------------------------------

@@ -10,7 +10,8 @@
  * Everything here works in SCREEN pixels, not world meters.
  */
 
-import { FX, FX_FONT } from './config.js';
+import { FX, FX_FONT, CONFIG } from './config.js';
+import { loadBool, saveBool } from './storage.js';
 
 const TAU = Math.PI * 2;
 const TEXT_FONT = '-apple-system, "SF Pro Display", "Helvetica Neue", Arial, sans-serif';
@@ -26,10 +27,24 @@ export class Effects {
     this.flashes = []; // FX: screen flash + rim bloom on a make
     this.grain = null; // FX: film grain tile, made on first use
     this.shakeAmount = 0;
+    // Low Stim Mode: turns off screen flash, screen shake and the pulsing
+    // on-fire edge glow, for players who want to relax without the jolts.
+    this.lowStim = loadBool(CONFIG.storageKeys.lowStim, false);
   }
 
-  /** FX: bright additive flash and a bloom at (x, y). */
+  setLowStim(on) {
+    this.lowStim = !!on;
+    saveBool(CONFIG.storageKeys.lowStim, this.lowStim);
+  }
+
+  toggleLowStim() {
+    this.setLowStim(!this.lowStim);
+    return this.lowStim;
+  }
+
+  /** FX: bright additive flash and a bloom at (x, y). Skipped in Low Stim Mode. */
   flash(x, y, strength = 0.3, color = '255, 190, 120') {
+    if (this.lowStim) return;
     this.flashes.push({ x, y, strength, color, life: 0, maxLife: 0.35 });
   }
 
@@ -112,7 +127,9 @@ export class Effects {
     this.texts.push({ x, y, text, color, size, life: 0, maxLife: life });
   }
 
+  /** Screen shake. Skipped in Low Stim Mode. */
   shake(amount) {
+    if (this.lowStim) return;
     this.shakeAmount = Math.max(this.shakeAmount, amount);
   }
 
@@ -305,8 +322,9 @@ export class Effects {
     ctx.restore();
   }
 
-  /** Pulsing orange glow around the edges of the screen. */
+  /** Pulsing orange glow around the edges of the screen. Skipped in Low Stim Mode. */
   drawFireGlow(ctx, width, height, time) {
+    if (this.lowStim) return;
     const pulse = 0.28 + Math.sin(time * 6) * 0.07;
     const g = ctx.createRadialGradient(width / 2, height / 2, Math.min(width, height) * 0.35, width / 2, height / 2, Math.max(width, height) * 0.75);
     g.addColorStop(0, 'rgba(255, 90, 20, 0)');

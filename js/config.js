@@ -135,6 +135,7 @@ export const CONFIG = {
     playerNames: 'ballin.playerNames',
     oldBest: 'ballin.bestScore', // from the very first version (Blitz on Hard)
     muted: 'ballin.muted',
+    lowStim: 'ballin.lowStim', // Low Stim Mode: no screen flash/shake/fire pulse (effects.js)
     inventory: 'ballin.inventory',
     missions: 'ballin.missions',
     wallet: 'ballin.wallet', // coins and ball styles (wallet.js)
