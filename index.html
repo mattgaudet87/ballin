@@ -79,6 +79,8 @@
     <!-- Home screen: pick a difficulty and a mode -->
     <section id="home-screen" class="overlay home scroll">
       <div class="panel">
+        <!-- Top-left corner: stadium, floor and ball looks -->
+        <button id="customize-btn" class="customize-btn" type="button"><span aria-hidden="true">🎨</span> Customize</button>
         <header class="hero">
           <div class="hero-ball" aria-hidden="true"></div>
           <h1 class="title">BALLIN'</h1>
@@ -94,14 +96,6 @@
           <button type="button" data-difficulty="normal">Normal</button>
           <button type="button" data-difficulty="hard">Hard</button>
         </div>
-
-        <!-- Home court: the dot is its lane paint color (court.js COURT_THEMES) -->
-        <button id="courts-btn" class="court-btn" type="button">
-          <span class="court-btn-label">Court</span>
-          <i id="court-dot" class="court-dot" aria-hidden="true"></i>
-          <b id="court-name">Brick Gym</b>
-          <span class="court-btn-change">Change ›</span>
-        </button>
 
         <div class="modes">
           <!-- Blitz is the full-width hero; Hot Hand + Free Throw pair up; Friends is a wide strip -->
@@ -165,67 +159,50 @@
       </div>
     </section>
 
-    <!-- Shop: spend coins on ball styles -->
-    <section id="shop-screen" class="overlay scroll hidden">
+    <!-- Customize: stadiums, floors and ball styles (bought with coins) -->
+    <section id="customize-screen" class="overlay scroll hidden">
       <div class="panel">
         <button class="back-btn" type="button" data-back aria-label="Back">‹</button>
-        <h1 class="mode-title shop-text">SHOP</h1>
+        <h1 class="mode-title shop-text">CUSTOMIZE</h1>
         <p class="tagline">Make baskets with a coin in the hoop, or beat friends online, to earn coins.</p>
         <div class="coin-balance"><span class="mini-coin" aria-hidden="true"></span><b id="shop-coins">0</b> coins</div>
-        <p id="shop-note" class="form-error hidden"></p>
-        <h2 class="section-title">Ball styles</h2>
-        <div id="shop-list" class="shop-list"></div>
-        <p class="how">Styles change how your ball looks in every mode. Tap one you own to use it. A Blue Monster (Hot Hand) makes coins worth 2×.</p>
-      </div>
-    </section>
 
-    <!-- Courts: pick the home court every mode plays on -->
-    <section id="courts-screen" class="overlay scroll hidden">
-      <div class="panel">
-        <button class="back-btn" type="button" data-back aria-label="Back">‹</button>
-        <h1 class="mode-title hot-text">COURTS</h1>
-        <p class="tagline">Pick your home court. Every mode plays on it.</p>
-        <div class="court-preview">
-          <canvas id="court-preview" aria-hidden="true"></canvas>
-          <div class="court-preview-label">
-            <span class="court-equipped">Equipped</span>
-            <span id="court-preview-name" class="court-preview-name"></span>
-          </div>
+        <div class="tabs three" role="tablist">
+          <button type="button" role="tab" data-look-tab="stadium">🏟️ Stadium</button>
+          <button type="button" role="tab" data-look-tab="floor">🪵 Floors</button>
+          <button type="button" role="tab" data-look-tab="ball">🏀 Balls</button>
         </div>
-        <h2 class="section-title">All courts</h2>
-        <div id="court-list" class="court-list" role="radiogroup" aria-label="Courts"></div>
+        <p id="shop-note" class="form-error hidden"></p>
+
+        <!-- Stadium and Floors: a big picture of what you'll play on, then a tile for each choice -->
+        <div id="looks-panel">
+          <div class="court-preview">
+            <canvas id="court-preview" aria-hidden="true"></canvas>
+            <div class="court-preview-label">
+              <span id="court-preview-floor" class="court-equipped"></span>
+              <span id="court-preview-name" class="court-preview-name"></span>
+            </div>
+          </div>
+          <div id="look-list" class="court-list" role="radiogroup"></div>
+          <p id="look-how" class="how"></p>
+        </div>
+
+        <!-- Balls: the old Shop -->
+        <div id="balls-panel" class="hidden">
+          <div id="shop-list" class="shop-list"></div>
+          <p class="how">Styles change how your ball looks in every mode. Tap one you own to use it. A Blue Monster (Hot Hand) makes coins worth 2×.</p>
+        </div>
       </div>
     </section>
 
-    <!-- Blitz with Friends: pass and play (names) or online (friends + challenges) -->
+    <!-- Blitz with Friends: online (friends + challenges), with Pass and play at the bottom -->
     <section id="friends-screen" class="overlay scroll hidden">
       <div class="panel">
         <button class="back-btn" type="button" data-back aria-label="Back">‹</button>
         <h1 class="mode-title friends-text">BLITZ WITH FRIENDS</h1>
 
-        <div class="tabs" role="tablist">
-          <button type="button" role="tab" data-tab="local">📱 Pass and play</button>
-          <button type="button" role="tab" data-tab="online">🌐 Online <span id="online-tab-badge" class="tab-badge hidden">0</span></button>
-        </div>
-
-        <div class="difficulty-picker" role="radiogroup" aria-label="Difficulty">
-          <button type="button" data-difficulty="easy">Easy</button>
-          <button type="button" data-difficulty="normal">Normal</button>
-          <button type="button" data-difficulty="hard">Hard</button>
-        </div>
-
-        <!-- Pass and play on one phone -->
-        <div id="local-panel">
-          <p class="tagline">Pass the phone between turns. Each player gets 2 rounds of 30 seconds (A, B, A, B). Highest total wins.</p>
-          <div class="name-fields">
-            <label>Player 1<input id="player1-name" type="text" maxlength="12" placeholder="Player 1" autocomplete="off" /></label>
-            <label>Player 2<input id="player2-name" type="text" maxlength="12" placeholder="Player 2" autocomplete="off" /></label>
-          </div>
-          <button id="friends-start-btn" class="big-btn" type="button">START MATCH</button>
-        </div>
-
         <!-- Online: log in / sign up, then challenges and friends -->
-        <div id="online-panel" class="hidden">
+        <div id="online-panel">
           <form id="auth-form" class="hidden" autocomplete="on">
             <p class="tagline">Make an account to add friends, challenge them and save your scores.</p>
             <div class="name-fields">
@@ -239,9 +216,16 @@
             </div>
             <p class="how">Usernames: 3–16 letters, numbers or _. Passwords: 6+ characters.</p>
           </form>
+          <div id="auth-passplay">
+            <p class="how">No account? Play a friend on this phone:</p>
+            <button class="big-btn passplay-btn" type="button" data-passplay>📱 PASS AND PLAY<small>Two players, one phone</small></button>
+          </div>
 
           <div id="account-block" class="hidden">
             <p class="tagline account-line">Logged in as <b id="account-name"></b> · <button id="logout-btn" class="link-btn" type="button">Log out</button></p>
+
+            <h2 class="section-title">Your stats</h2>
+            <div id="my-stats" class="stats record"></div>
 
             <div class="section-head">
               <h2 class="section-title">Friends</h2>
@@ -253,13 +237,34 @@
             </form>
             <p id="online-error" class="form-error hidden"></p>
             <div id="friend-list" class="online-list"></div>
+            <!-- Two players on one phone: opens its own setup screen -->
+            <button class="big-btn passplay-btn" type="button" data-passplay>📱 PASS AND PLAY<small>Two players, one phone</small></button>
 
             <h2 class="section-title">Challenges</h2>
             <div id="challenge-list" class="online-list"></div>
 
-            <p class="how">Tap a friend to see your games together. A challenge is one 60-second Blitz each on the difficulty above. You play now, they play whenever. Higher score wins.</p>
+            <p class="how">Tap a friend to see your games together. A challenge is one 60-second Blitz each on the difficulty you pick. You play now, they play whenever. Higher score wins.</p>
           </div>
         </div>
+      </div>
+    </section>
+
+    <!-- Pass and play setup: difficulty + names -->
+    <section id="passplay-screen" class="overlay scroll hidden">
+      <div class="panel">
+        <button id="passplay-back-btn" class="back-btn" type="button" aria-label="Back">‹</button>
+        <h1 class="mode-title passplay-text">PASS AND PLAY</h1>
+        <p class="tagline">Pass the phone between turns. Each player gets 2 rounds of 30 seconds (A, B, A, B). Highest total wins.</p>
+        <div class="difficulty-picker" role="radiogroup" aria-label="Difficulty">
+          <button type="button" data-difficulty="easy">Easy</button>
+          <button type="button" data-difficulty="normal">Normal</button>
+          <button type="button" data-difficulty="hard">Hard</button>
+        </div>
+        <div class="name-fields">
+          <label>Player 1<input id="player1-name" type="text" maxlength="12" placeholder="Player 1" autocomplete="off" /></label>
+          <label>Player 2<input id="player2-name" type="text" maxlength="12" placeholder="Player 2" autocomplete="off" /></label>
+        </div>
+        <button id="friends-start-btn" class="big-btn" type="button">START MATCH</button>
       </div>
     </section>
 
@@ -329,6 +334,21 @@
         </div>
       </div>
     </section>
+
+    <!-- Challenge popup: pick the difficulty before playing (tap outside to cancel) -->
+    <div id="challenge-popup" class="popup hidden" role="dialog" aria-label="Pick a difficulty">
+      <div class="popup-card">
+        <p class="eyebrow">CHALLENGE</p>
+        <h2 id="challenge-popup-name" class="friend-name"></h2>
+        <p class="tagline">Pick a difficulty. You play first, then they play the same one.</p>
+        <div class="challenge-picks">
+          <button type="button" class="ghost-btn" data-pick="easy">EASY</button>
+          <button type="button" class="ghost-btn" data-pick="normal">NORMAL</button>
+          <button type="button" class="ghost-btn" data-pick="hard">HARD</button>
+        </div>
+        <button type="button" class="link-btn" data-pick-cancel>Cancel</button>
+      </div>
+    </div>
 
     <!-- Reward reveal popup (tap anywhere to close) -->
     <div id="reward-popup" class="popup hidden" role="dialog" aria-label="Reward">

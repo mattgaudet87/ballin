@@ -4,14 +4,17 @@
  * Draws the background: a brick back wall, a hardwood floor with painted court
  * lines, and the lighting on top.
  *
- * The player picks a home court on the Courts screen (COURT_THEMES, in the
- * order the picker shows them). Until they pick one, each difficulty uses its
- * classic court:
+ * The player picks a stadium on the Customize screen (COURT_THEMES, in the
+ * order the picker shows them; `price` in coins, 0 = free). Until they pick
+ * one, each difficulty uses its classic court (the three free ones):
  *   Easy   = Rec Center  (light brick, maple floor, blue paint)
  *   Normal = Brick Gym   (red brick, warm floor, red paint)
  *   Hard   = Night Court (dark brick, dark floor, purple paint, spotlight)
  * A theme can also recolor the hoop (`hoop`, see hoop.js), the drifting dust
  * (`mote`, see effects.js drawMotes) and the FX color grade (`grade`).
+ *
+ * The floor surface is picked separately (FLOORS) and works on any stadium.
+ * 'stadium' keeps the stadium's own wood.
  *
  * The background never changes during play, so main.js draws it ONCE into a
  * hidden canvas whenever the screen size, difficulty or court changes, then
@@ -27,6 +30,7 @@ import { camera, project } from './camera.js';
 export const COURT_THEMES = {
   heatwave: {
     name: 'Heat Wave',
+    price: 300,
     mote: '255, 220, 200', // "r, g, b" of the floating dust (effects.js)
     brick: [222, 118, 92],
     mortar: '#f1c7b2',
@@ -42,6 +46,7 @@ export const COURT_THEMES = {
   },
   goldrush: {
     name: 'Gold Rush',
+    price: 700,
     mote: '255, 225, 150',
     brick: [88, 52, 124],
     mortar: '#39234f',
@@ -56,6 +61,7 @@ export const COURT_THEMES = {
   },
   evergreen: {
     name: 'Evergreen',
+    price: 450,
     mote: '230, 255, 220',
     brick: [60, 104, 74],
     mortar: '#22382a',
@@ -70,6 +76,7 @@ export const COURT_THEMES = {
   },
   icebox: {
     name: 'Ice Box',
+    price: 450,
     mote: '210, 235, 255',
     brick: [192, 212, 232],
     mortar: '#eef4fa',
@@ -84,6 +91,7 @@ export const COURT_THEMES = {
   },
   inferno: {
     name: 'Inferno',
+    price: 900,
     mote: '255, 150, 60',
     brick: [46, 40, 42],
     mortar: '#141214',
@@ -98,6 +106,7 @@ export const COURT_THEMES = {
   },
   sweetswish: {
     name: 'Sweet Swish',
+    price: 300,
     mote: '255, 205, 232',
     brick: [238, 168, 196],
     mortar: '#fde4ee',
@@ -113,6 +122,7 @@ export const COURT_THEMES = {
   // The three classics: each difficulty's court until the player picks one
   easy: {
     name: 'Rec Center',
+    price: 0, // free
     brick: [214, 178, 140], // RGB of an average brick
     mortar: '#e9dcc8',
     wallPad: '#2c5aa0', // padding along the bottom of the wall
@@ -124,6 +134,7 @@ export const COURT_THEMES = {
   },
   normal: {
     name: 'Brick Gym',
+    price: 0, // free
     brick: [168, 70, 48],
     mortar: '#c9a58f',
     wallPad: '#1d2340',
@@ -135,6 +146,7 @@ export const COURT_THEMES = {
   },
   hard: {
     name: 'Night Court',
+    price: 0, // free
     brick: [70, 64, 78],
     mortar: '#2a2733',
     wallPad: '#16121f',
@@ -144,6 +156,23 @@ export const COURT_THEMES = {
     light: 'rgba(170, 150, 255, 0.35)',
     shade: 0.65,
   },
+};
+
+/**
+ * Floor surfaces (the Floors tab). Each one works on any stadium:
+ *   wood  = RGB of an average plank (drawn as planks, like the stadiums' floors)
+ *   solid = RGB of a one-piece sport surface (no planks)
+ *   speckle = little light/dark dots (asphalt), grid = glowing tile lines (LED glass)
+ * The stadium's lane paint and court lines are drawn on top of any floor.
+ */
+export const FLOORS = {
+  stadium: { name: 'Stadium', price: 0 }, // the stadium's own floor
+  maple: { name: 'Maple', price: 0, wood: [240, 206, 158] },
+  cherry: { name: 'Cherry', price: 200, wood: [176, 84, 56] },
+  blacktop: { name: 'Blacktop', price: 250, solid: [62, 64, 70], speckle: true },
+  ebony: { name: 'Ebony', price: 350, wood: [66, 52, 50] },
+  royal: { name: 'Royal Court', price: 400, solid: [36, 80, 170] },
+  glass: { name: 'LED Glass', price: 800, solid: [18, 22, 40], grid: 'rgba(90, 210, 255, 0.5)' },
 };
 
 // Used when a theme doesn't set its own
@@ -173,18 +202,30 @@ const PAD_HEIGHT = 0.28; // wall padding strip at the bottom
 const PLANK_W = 0.11;
 const LANE_HALF_WIDTH = 0.9;
 const FREE_THROW_Z = 0.25; // just in front of the resting ball
+const SPECKLES = 2500; // dots in a speckled (blacktop) floor
+const GRID_TILE = 0.5; // size of a glass floor tile
 
-/** `hoop` supplies where things are (its distance changes with difficulty). */
-export function drawCourt(ctx, width, height, hoop, courtId = 'normal') {
+/** A floor's color as CSS, e.g. for its dot (the stadium floor uses the stadium's wood). */
+export function floorColor(floorId, courtId) {
+  const floor = FLOORS[floorId] ?? FLOORS.stadium;
+  return rgb(floor.solid ?? floor.wood ?? courtTheme(courtId).wood, 1);
+}
+
+/**
+ * `hoop` supplies where things are (its distance changes with difficulty).
+ * `floorId` is a key of FLOORS ('stadium' = the stadium's own wood).
+ */
+export function drawCourt(ctx, width, height, hoop, courtId = 'normal', floorId = 'stadium') {
   // A hidden page can report a 0 size: bricks would be 0 px tall and the wall loop would never end
   if (!(width > 0 && height > 0)) return;
   const theme = courtTheme(courtId);
+  const floor = FLOORS[floorId] ?? FLOORS.stadium;
   const random = seededRandom(7); // same "random" bricks every time we redraw
   const floorLine = project(0, 0, hoop.wallZ).y;
 
   drawWall(ctx, width, floorLine, hoop, theme, random);
   if (FX) depthOfField(ctx, width, floorLine);
-  drawFloor(ctx, width, height, floorLine, hoop, theme, random);
+  drawFloor(ctx, width, height, floorLine, hoop, theme, floor, random);
   drawLines(ctx, hoop, theme);
   drawLighting(ctx, width, height, floorLine, hoop, theme);
 }
@@ -244,21 +285,42 @@ function drawWall(ctx, width, floorLine, hoop, theme, random) {
 // Floor
 // ---------------------------------------------------------------------------
 
-function drawFloor(ctx, width, height, floorLine, hoop, theme, random) {
+function drawFloor(ctx, width, height, floorLine, hoop, theme, floor, random) {
   const far = hoop.wallZ;
   const near = camera.z + 0.2; // just in front of the camera
 
+  if (floor.solid) drawSolidFloor(ctx, width, height, floorLine, far, near, floor, random);
+  else drawPlanks(ctx, width, height, floorLine, far, near, floor.wood ?? theme.wood, random);
+
+  // Painted lane (the "key") from the baseline to the free throw line
+  const baseZ = baselineZ(hoop);
+  fillFloorShape(ctx, [
+    [-LANE_HALF_WIDTH, baseZ],
+    [LANE_HALF_WIDTH, baseZ],
+    [LANE_HALF_WIDTH, FREE_THROW_Z],
+    [-LANE_HALF_WIDTH, FREE_THROW_Z],
+  ], theme.paint);
+
+  // Dark shadow where the floor meets the wall
+  const shadow = ctx.createLinearGradient(0, floorLine, 0, floorLine + (height - floorLine) * 0.12);
+  shadow.addColorStop(0, 'rgba(0, 0, 0, 0.45)');
+  shadow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = shadow;
+  ctx.fillRect(0, floorLine, width, height - floorLine);
+}
+
+/** Hardwood: planks that run toward the wall, all pointing at the same vanishing point. */
+function drawPlanks(ctx, width, height, floorLine, far, near, wood, random) {
   // Base color first so no gaps show between planks
-  ctx.fillStyle = rgb(theme.wood, 0.85);
+  ctx.fillStyle = rgb(wood, 0.85);
   ctx.fillRect(0, floorLine, width, height - floorLine);
 
-  // Planks run toward the wall, so they all point at the same vanishing point
   for (let x = -6; x < 6; x += PLANK_W) {
     const a = project(x, 0, far);
     const b = project(x + PLANK_W, 0, far);
     const c = project(x + PLANK_W, 0, near);
     const d = project(x, 0, near);
-    ctx.fillStyle = rgb(theme.wood, 0.88 + random() * 0.2);
+    ctx.fillStyle = rgb(wood, 0.88 + random() * 0.2);
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
@@ -285,22 +347,32 @@ function drawFloor(ctx, width, height, floorLine, hoop, theme, random) {
       ctx.stroke();
     }
   }
+}
 
-  // Painted lane (the "key") from the baseline to the free throw line
-  const baseZ = baselineZ(hoop);
-  fillFloorShape(ctx, [
-    [-LANE_HALF_WIDTH, baseZ],
-    [LANE_HALF_WIDTH, baseZ],
-    [LANE_HALF_WIDTH, FREE_THROW_Z],
-    [-LANE_HALF_WIDTH, FREE_THROW_Z],
-  ], theme.paint);
-
-  // Dark shadow where the floor meets the wall
-  const shadow = ctx.createLinearGradient(0, floorLine, 0, floorLine + (height - floorLine) * 0.12);
-  shadow.addColorStop(0, 'rgba(0, 0, 0, 0.45)');
-  shadow.addColorStop(1, 'rgba(0, 0, 0, 0)');
-  ctx.fillStyle = shadow;
+/** A one-piece surface (blacktop, sport court, glass), with optional speckles or a glowing grid. */
+function drawSolidFloor(ctx, width, height, floorLine, far, near, floor, random) {
+  // Slightly darker far away, so the floor still reads as going back to the wall
+  const base = ctx.createLinearGradient(0, floorLine, 0, height);
+  base.addColorStop(0, rgb(floor.solid, 0.8));
+  base.addColorStop(1, rgb(floor.solid, 1.05));
+  ctx.fillStyle = base;
   ctx.fillRect(0, floorLine, width, height - floorLine);
+
+  if (floor.speckle) {
+    // Little stones in the asphalt: smaller and denser toward the wall
+    for (let i = 0; i < SPECKLES; i++) {
+      const p = project(-6 + random() * 12, 0, near + random() * (far - near));
+      const size = Math.max(0.6, p.scale * 0.008);
+      ctx.fillStyle = random() < 0.5 ? 'rgba(255, 255, 255, 0.16)' : 'rgba(0, 0, 0, 0.25)';
+      ctx.fillRect(p.x, p.y, size, size * 0.6);
+    }
+  }
+
+  if (floor.grid) {
+    ctx.strokeStyle = floor.grid;
+    for (let x = -6; x <= 6; x += GRID_TILE) floorPath(ctx, [[x, far], [x, near]]);
+    for (let z = far; z > near; z -= GRID_TILE) floorPath(ctx, [[-6, z], [6, z]]);
+  }
 }
 
 function baselineZ(hoop) {

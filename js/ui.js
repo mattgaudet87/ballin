@@ -2,9 +2,9 @@
  * ui.js
  * ---------------------------------------------------------------------------
  * Everything drawn with regular HTML instead of the canvas:
- *   - menu screens: home, Shop (ball styles), Courts (home court picker), Hot Hand hub (missions + locker), Blitz with
- *     Friends (pass-and-play names, or online: login, challenges, friends),
- *     a friend's page, pass-the-phone handoff, friends results, game over
+ *   - menu screens: home, Customize (Stadium / Floors / Balls tabs), Hot Hand hub (missions + locker),
+ *     Blitz with Friends (online: login, your stats, friends, challenges; Pass and play button),
+ *     Pass and play setup (names), a friend's page, pass-the-phone handoff, friends results, game over
  *   - the reward popup
  *   - the in-game HUD, "swipe up" hint and power-up trays
  *   - the mute button
@@ -15,8 +15,8 @@
  */
 import { CONFIG } from './config.js';
 import { ITEMS, BALL_IDS, DRINK_IDS } from './items.js';
-import { BALL_STYLES, STYLE_IDS } from './wallet.js';
-import { COURT_THEMES, courtColor } from './court.js';
+import { BALL_STYLES, STYLE_IDS, CATALOG } from './wallet.js';
+import { COURT_THEMES, FLOORS, courtColor, floorColor } from './court.js';
 
 const $ = (id) => document.getElementById(id);
 const $$ = (selector) => document.querySelectorAll(selector);
@@ -24,10 +24,10 @@ const $$ = (selector) => document.querySelectorAll(selector);
 /** Menu screens by name (only one is visible at a time). */
 const SCREENS = {
   home: 'home-screen',
-  shop: 'shop-screen',
-  courts: 'courts-screen',
+  customize: 'customize-screen',
   hothand: 'hothand-screen',
   friends: 'friends-screen',
+  passplay: 'passplay-screen',
   friend: 'friend-screen',
   handoff: 'handoff-screen',
   results: 'results-screen',
@@ -53,11 +53,14 @@ export class UI {
       shopCoins: $('shop-coins'),
       shopList: $('shop-list'),
       shopNote: $('shop-note'),
-      courtName: $('court-name'),
-      courtDot: $('court-dot'),
       courtPreview: $('court-preview'),
       courtPreviewName: $('court-preview-name'),
-      courtList: $('court-list'),
+      courtPreviewFloor: $('court-preview-floor'),
+      lookList: $('look-list'),
+      lookHow: $('look-how'),
+      looksPanel: $('looks-panel'),
+      ballsPanel: $('balls-panel'),
+      authPassplay: $('auth-passplay'),
       statCoinsWrap: $('stat-coins-wrap'),
       statCoins: $('stat-coins'),
       timer: $('timer'),
@@ -82,6 +85,9 @@ export class UI {
       resultsWinner: $('results-winner'),
       resultsTable: $('results-table'),
       rewardPopup: $('reward-popup'),
+      challengePopup: $('challenge-popup'),
+      challengePopupName: $('challenge-popup-name'),
+      myStats: $('my-stats'),
       rewardItems: $('reward-items'),
       ballTray: $('ball-tray'),
       drinkTray: $('drink-tray'),
@@ -93,9 +99,6 @@ export class UI {
       gameOverNote: $('gameover-note'),
       againBtn: $('again-btn'),
       friendsBadge: $('friends-badge'),
-      onlineTabBadge: $('online-tab-badge'),
-      localPanel: $('local-panel'),
-      onlinePanel: $('online-panel'),
       addFriendForm: $('add-friend-form'),
       friendAvatar: $('friend-avatar'),
       friendName: $('friend-name'),
@@ -130,29 +133,29 @@ export class UI {
     $$('[data-back], [data-home], #menu-btn').forEach((btn) => btn.addEventListener('click', callback));
   }
 
-  /** The coins button on the home screen. */
-  onShop(callback) {
-    $('shop-btn').addEventListener('click', callback);
+  /**
+   * The home screen's Customize button (top left) and coins button.
+   * callback(tab) with the tab to open: 'stadium' or 'ball'.
+   */
+  onCustomize(callback) {
+    $('customize-btn').addEventListener('click', () => callback('stadium'));
+    $('shop-btn').addEventListener('click', () => callback('ball'));
   }
 
-  /** callback(styleId) when a ball in the Shop is tapped. */
-  onShopItem(callback) {
+  /** callback('stadium' | 'floor' | 'ball') when a Customize tab is tapped. */
+  onCustomizeTab(callback) {
+    $$('[data-look-tab]').forEach((tab) => tab.addEventListener('click', () => callback(tab.dataset.lookTab)));
+  }
+
+  /** callback(kind, id) when a stadium, floor or ball on the Customize screen is tapped. */
+  onCustomizeItem(callback) {
     this.el.shopList.addEventListener('click', (e) => {
       const button = e.target.closest('[data-style]');
-      if (button) callback(button.dataset.style);
+      if (button) callback('ball', button.dataset.style);
     });
-  }
-
-  /** The home court button on the home screen. */
-  onCourts(callback) {
-    $('courts-btn').addEventListener('click', callback);
-  }
-
-  /** callback(courtId) when a court tile on the Courts screen is tapped. */
-  onCourtPick(callback) {
-    this.el.courtList.addEventListener('click', (e) => {
-      const button = e.target.closest('[data-court]');
-      if (button) callback(button.dataset.court);
+    this.el.lookList.addEventListener('click', (e) => {
+      const button = e.target.closest('[data-look]');
+      if (button) callback(button.dataset.kind, button.dataset.look);
     });
   }
 
@@ -228,19 +231,10 @@ export class UI {
     });
   }
 
-  /** callback('local' | 'online') when a Blitz with Friends tab is tapped. */
-  onFriendsTab(callback) {
-    $$('[data-tab]').forEach((tab) => tab.addEventListener('click', () => callback(tab.dataset.tab)));
-  }
-
-  /** Show the Pass and play or Online part of the Blitz with Friends screen. */
-  setFriendsTab(tab) {
-    $$('[data-tab]').forEach((btn) => {
-      btn.classList.toggle('selected', btn.dataset.tab === tab);
-      btn.setAttribute('aria-selected', btn.dataset.tab === tab);
-    });
-    this.el.localPanel.classList.toggle('hidden', tab !== 'local');
-    this.el.onlinePanel.classList.toggle('hidden', tab !== 'online');
+  /** The PASS AND PLAY buttons on the Blitz with Friends screen, and the back arrow on its setup screen. */
+  onPassAndPlay({ open, back }) {
+    $$('[data-passplay]').forEach((btn) => btn.addEventListener('click', open));
+    $('passplay-back-btn').addEventListener('click', back);
   }
 
   /** The friend page's buttons. handlers: { back(), challenge(), remove() } */
@@ -338,42 +332,64 @@ export class UI {
   }
 
   /**
-   * Fill the Shop: every ball style with its price, or OWNED / IN USE.
-   * `note` is an optional message (e.g. "You need 40 more coins").
+   * Fill the Customize screen.
+   * @param tab       'stadium' | 'floor' | 'ball'
+   * @param wallet    coins and what you own (wallet.js)
+   * @param look      what you play on now: { stadium, floor } ids
+   * @param note      optional message (e.g. "You need 40 more coins")
+   * Stadium/floor tiles are only rebuilt when the tab changes, because main.js
+   * then has to draw their pictures again (see lookCanvases()). Returns true
+   * when it rebuilt them.
    */
-  renderShop(wallet, note = null) {
-    this.el.shopCoins.textContent = wallet.balance.toLocaleString();
-    showMessage(this.el.shopNote, note);
-    this.el.shopList.innerHTML = STYLE_IDS.map((id) => shopCard(id, wallet)).join('');
-  }
+  renderCustomize(tab, wallet, look, note = null) {
+    const e = this.el;
+    e.shopCoins.textContent = wallet.balance.toLocaleString();
+    showMessage(e.shopNote, note);
+    $$('[data-look-tab]').forEach((btn) => {
+      btn.classList.toggle('selected', btn.dataset.lookTab === tab);
+      btn.setAttribute('aria-selected', btn.dataset.lookTab === tab);
+    });
+    e.looksPanel.classList.toggle('hidden', tab === 'ball');
+    e.ballsPanel.classList.toggle('hidden', tab !== 'ball');
+    if (tab === 'ball') {
+      e.shopList.innerHTML = STYLE_IDS.map((id) => shopCard(id, wallet)).join('');
+      return false;
+    }
 
-  /** Show the home court's name and lane color on the home screen button. */
-  setCourt(id) {
-    this.setText('courtName', COURT_THEMES[id].name);
-    this.el.courtDot.style.background = courtColor(id);
+    const rebuild = e.lookList.dataset.kind !== tab;
+    if (rebuild) {
+      e.lookList.dataset.kind = tab;
+      e.lookList.setAttribute('aria-label', tab === 'stadium' ? 'Stadiums' : 'Floors');
+      e.lookList.innerHTML = Object.keys(CATALOG[tab]).map((id) => lookTile(tab, id, look)).join('');
+      e.lookHow.textContent = tab === 'stadium'
+        ? 'Every mode plays in your stadium. Tap one you own to use it.'
+        : 'Floors work in any stadium. “Stadium” keeps the stadium’s own floor.';
+    }
+    for (const tile of e.lookList.children) {
+      const id = tile.dataset.look;
+      const item = CATALOG[tab][id];
+      const owned = wallet.owns(tab, id);
+      const on = look[tab] === id;
+      tile.classList.toggle('selected', on);
+      tile.classList.toggle('locked', !owned && wallet.balance < item.price);
+      tile.setAttribute('aria-checked', on);
+      tile.querySelector('.court-tile-price').innerHTML = on
+        ? '✓ IN USE'
+        : owned ? (item.price ? 'OWNED' : 'FREE') : `<span class="mini-coin" aria-hidden="true"></span>${item.price.toLocaleString()}`;
+    }
+    e.courtPreviewName.textContent = COURT_THEMES[look.stadium].name;
+    e.courtPreviewFloor.textContent = look.floor === 'stadium' ? 'In use' : `${FLOORS[look.floor].name} floor`;
+    return rebuild;
   }
 
   /**
-   * Fill the Courts screen: a tile for every court (built once) with `selectedId`
-   * highlighted, and the big preview set to it. main.js then draws the pictures
-   * into the canvases from courtCanvases().
+   * The Customize canvases to draw. Each can have data-court and/or data-floor;
+   * whatever's missing means "the one in use". Only the big preview if `previewOnly`.
    */
-  renderCourts(selectedId) {
-    if (!this.el.courtList.children.length) {
-      this.el.courtList.innerHTML = Object.keys(COURT_THEMES).map(courtTile).join('');
-    }
-    for (const tile of this.el.courtList.children) {
-      const on = tile.dataset.court === selectedId;
-      tile.classList.toggle('selected', on);
-      tile.setAttribute('aria-checked', on);
-    }
-    this.el.courtPreview.dataset.court = selectedId;
-    this.el.courtPreviewName.textContent = COURT_THEMES[selectedId].name;
-  }
-
-  /** The Courts screen canvases to draw (each has data-court). Only the big preview if `previewOnly`. */
-  courtCanvases(previewOnly = false) {
-    return previewOnly ? [this.el.courtPreview] : [this.el.courtPreview, ...this.el.courtList.querySelectorAll('canvas')];
+  lookCanvases(previewOnly = false) {
+    const preview = [this.el.courtPreview];
+    if (previewOnly || this.el.looksPanel.classList.contains('hidden')) return preview;
+    return [...preview, ...this.el.lookList.querySelectorAll('canvas')];
   }
 
   /** Fill the Hot Hand hub's missions and locker. */
@@ -473,13 +489,30 @@ export class UI {
 
   // --- Online ------------------------------------------------------------------------
 
-  /** Red "your turn" counters on the Blitz with Friends card and the Online tab. */
+  /**
+   * Ask which difficulty to challenge a friend on. `current` is highlighted.
+   * Calls onPick(difficultyId), or nothing if they tap Cancel or outside the card.
+   */
+  showChallengePicker(username, current, onPick) {
+    const popup = this.el.challengePopup;
+    this.el.challengePopupName.textContent = `vs ${username}`;
+    popup.querySelectorAll('[data-pick]').forEach((btn) => btn.classList.toggle('selected', btn.dataset.pick === current));
+    popup.classList.remove('hidden');
+    const close = (e) => {
+      const pick = e.target.closest('[data-pick]');
+      const cancel = e.target === popup || e.target.closest('[data-pick-cancel]');
+      if (!pick && !cancel) return; // a tap on the card itself
+      popup.classList.add('hidden');
+      popup.removeEventListener('click', close);
+      if (pick) onPick(pick.dataset.pick);
+    };
+    popup.addEventListener('click', close);
+  }
+
+  /** Red "your turn" counter on the Blitz with Friends card. */
   setOnlineStatus(yourTurnCount = 0) {
-    for (const badge of [this.el.friendsBadge, this.el.onlineTabBadge]) {
-      badge.textContent = yourTurnCount;
-      badge.classList.toggle('hidden', !yourTurnCount);
-    }
     this.el.friendsBadge.textContent = `${yourTurnCount} YOUR TURN`;
+    this.el.friendsBadge.classList.toggle('hidden', !yourTurnCount);
   }
 
   /**
@@ -491,10 +524,12 @@ export class UI {
   renderOnline({ username, friends, challenges }) {
     const e = this.el;
     e.authForm.classList.toggle('hidden', !!username);
+    e.authPassplay.classList.toggle('hidden', !!username);
     e.accountBlock.classList.toggle('hidden', !username);
     if (!username) return;
 
     e.accountName.textContent = username;
+    e.myStats.innerHTML = myStats(friends);
     const loading = '<p class="list-empty">Loading…</p>';
     // Open challenges, plus the last few results (the full history is on each friend's page)
     const open = challenges?.filter((c) => c.status === 'yourTurn' || c.status === 'waiting') ?? [];
@@ -681,19 +716,26 @@ function missionCard(mission, index) {
   </div>`;
 }
 
-/** A ball style in the Shop: a preview ball, its name, and the price or whether it's yours. */
-/** One tile on the Courts screen: a picture of the court (drawn by main.js) and its name. */
-function courtTile(id) {
-  const color = courtColor(id);
-  return `<button class="court-tile" type="button" role="radio" data-court="${id}" style="--dot: ${color}">
-    <canvas data-court="${id}" aria-hidden="true"></canvas>
-    <span class="court-tile-name"><i class="court-dot"></i>${COURT_THEMES[id].name}</span>
+/**
+ * A stadium or floor tile on the Customize screen: a picture (drawn by main.js),
+ * its name and its price or status (filled in by renderCustomize). A stadium's
+ * picture uses the floor in use, and a floor's picture uses the stadium in use.
+ */
+function lookTile(kind, id, look) {
+  const isStadium = kind === 'stadium';
+  const color = isStadium ? courtColor(id) : floorColor(id, look.stadium);
+  const canvas = isStadium ? `data-court="${id}"` : `data-floor="${id}"`;
+  return `<button class="court-tile" type="button" role="radio" data-kind="${kind}" data-look="${id}" style="--dot: ${color}">
+    <canvas ${canvas} aria-hidden="true"></canvas>
+    <span class="court-tile-name"><i class="court-dot"></i>${CATALOG[kind][id].name}</span>
+    <span class="court-tile-price"></span>
   </button>`;
 }
 
+/** A ball style on the Balls tab: a preview ball, its name, and the price or whether it's yours. */
 function shopCard(id, wallet) {
   const style = BALL_STYLES[id];
-  const owned = wallet.owns(id);
+  const owned = wallet.owns('ball', id);
   const inUse = wallet.equipped === id;
   const tooMuch = !owned && wallet.balance < style.price;
   const status = inUse ? '✓ IN USE' : owned ? 'OWNED · TAP TO USE' : `<span class="mini-coin" aria-hidden="true"></span>${style.price.toLocaleString()}`;
@@ -754,6 +796,17 @@ function friendRow(friend) {
     </button>
     <button type="button" class="row-btn" data-action="challenge" data-value="${name}">CHALLENGE</button>
   </div>`;
+}
+
+/** Your wins/losses/ties added up across every friend (dashes while loading). */
+function myStats(friends) {
+  const total = (key) => (friends ? friends.reduce((sum, f) => sum + f.record[key], 0) : '–');
+  const [wins, losses, ties] = [total('wins'), total('losses'), total('ties')];
+  const played = friends ? wins + losses + ties : '–';
+  return `<div class="win"><span>${wins}</span><small>Wins</small></div>
+    <div class="loss"><span>${losses}</span><small>Losses</small></div>
+    <div><span>${ties}</span><small>Ties</small></div>
+    <div><span>${played}</span><small>Played</small></div>`;
 }
 
 /** The body of a friend's page: record, head-to-head numbers, their bests and game history. */

@@ -1011,48 +1011,29 @@ body {
   margin: 18px 0 8px;
 }
 
-/* Home court button under the home picker */
-.court-btn {
-  display: flex;
+/* Customize button in the home screen's top-left corner (same spot as the back arrows) */
+.customize-btn {
+  position: absolute;
+  top: calc(var(--safe-top) + 14px);
+  left: 14px;
+  z-index: 1;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  width: 100%;
-  margin: 0 0 14px;
-  padding: 9px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.06);
+  gap: 6px;
+  height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.1);
   color: #fff;
   font-family: var(--font);
+  font-size: 14px;
+  font-weight: 800;
   cursor: pointer;
 }
 
-.court-btn:active {
-  transform: scale(0.98);
-}
-
-.court-btn-label {
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.court-btn b {
-  font-family: var(--display);
-  font-style: italic;
-  font-weight: 800;
-  font-size: 19px;
-  line-height: 1;
-  text-transform: uppercase;
-}
-
-.court-btn-change {
-  margin-left: auto;
-  font-size: 13px;
-  font-weight: 800;
-  color: var(--accent-light);
+.customize-btn:active {
+  transform: scale(0.96);
 }
 
 /* Small dot in a court's lane paint color (set from ui.js) */
@@ -1387,7 +1368,7 @@ body {
   font-weight: 600;
 }
 
-/* --- Blitz with Friends tabs ------------------------------------------------ */
+/* --- Tabs (Customize screen) ------------------------------------------------ */
 
 .tabs {
   display: grid;
@@ -1413,24 +1394,14 @@ body {
   cursor: pointer;
 }
 
+.tabs.three {
+  grid-template-columns: repeat(3, 1fr);
+}
+
 .tabs button.selected {
   background: linear-gradient(135deg, #c77dff, #8a3ffc);
   color: #fff;
   box-shadow: 0 6px 18px rgba(140, 80, 255, 0.45);
-}
-
-.tab-badge {
-  display: inline-grid;
-  place-items: center;
-  min-width: 20px;
-  height: 20px;
-  margin-left: 4px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: #ff3b5c;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 900;
 }
 
 .section-head {
@@ -1800,6 +1771,21 @@ body {
   animation: pop 0.45s cubic-bezier(0.2, 1.6, 0.4, 1) both;
 }
 
+/* Challenge popup: one button per difficulty */
+.challenge-picks {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0 14px;
+}
+
+.challenge-picks .ghost-btn.selected {
+  border-color: var(--accent-light);
+}
+
+#my-stats {
+  margin-bottom: 18px;
+}
+
 .reward-items {
   display: grid;
   gap: 12px;
@@ -1919,7 +1905,7 @@ body {
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
 }
 
-#courts-screen .section-title {
+#customize-screen .section-title {
   margin-top: 22px;
   text-align: left;
 }
@@ -1978,7 +1964,73 @@ body {
   overflow: hidden;
 }
 
+.court-tile-price {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 3px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.court-tile.selected .court-tile-price {
+  color: #4be08a;
+}
+
+.court-tile-price .mini-coin {
+  width: 11px;
+  height: 11px;
+}
+
+/* Can't afford it yet */
+.court-tile.locked .court-tile-price {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.court-tile.locked canvas {
+  filter: saturate(0.4) brightness(0.7);
+}
+
+#look-list {
+  margin-top: 14px;
+}
+
 .court-tile-name .court-dot {
   width: 6px;
   height: 6px;
+}
+
+/* --------------------------------------------------------------------------
+   Pass and play: a teal button (not the orange PLAY buttons) under the friends list
+   -------------------------------------------------------------------------- */
+
+.big-btn.passplay-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-top: 14px;
+  background: linear-gradient(180deg, #3fe0c5, #0f9e8a);
+  box-shadow: 0 10px 30px rgba(20, 190, 160, 0.4), inset 0 -4px 0 rgba(0, 0, 0, 0.15);
+}
+
+.passplay-btn small {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+}
+
+.passplay-text {
+  font-size: 38px;
+  background: linear-gradient(180deg, #b6fff1, #3fe0c5 60%, #0f9e8a);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+#passplay-screen .difficulty-picker {
+  margin-top: 18px;
 }

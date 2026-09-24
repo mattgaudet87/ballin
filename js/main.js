@@ -9,13 +9,14 @@
  *      basket multipliers and missions
  *   5. runs the online screens (login, friends, challenges) using online.js
  *   6. coins: a coin can float in the hoop before any shot; make it to grab
- *      it. Coins buy ball styles in the Shop (wallet.js)
- *   7. the Courts screen: the picked home court replaces each difficulty's
- *      classic court in every mode (court.js COURT_THEMES)
+ *      it. Coins buy stadiums, floors and ball styles on the Customize screen (wallet.js)
+ *   7. the Customize screen: the picked stadium replaces each difficulty's
+ *      classic court in every mode, and the picked floor goes in any stadium
+ *      (court.js COURT_THEMES and FLOORS)
  *
  * The other modules each do one job and main.js wires them together.
  * Mode rules live in modes.js, power-ups in items.js, missions in missions.js,
- * coins and the Shop in wallet.js, and talking to the server in online.js.
+ * coins and what they buy in wallet.js, and talking to the server in online.js.
  */
 import { CONFIG, FX } from './config.js';
 import { fitCamera, project } from './camera.js';
@@ -26,13 +27,13 @@ import { SwipeInput } from './input.js';
 import { UI } from './ui.js';
 import { SoundFX } from './audio.js';
 import { Effects } from './effects.js';
-import { drawCourt, courtTheme, courtMote, COURT_THEMES } from './court.js';
+import { drawCourt, courtTheme, courtMote, COURT_THEMES, FLOORS } from './court.js';
 import { loadNumber, saveNumber, loadJSON, saveJSON } from './storage.js';
 import { MODES, DIFFICULTIES, rollBasketMultiplier } from './modes.js';
 import { Inventory, ITEMS, DRINK_EFFECTS } from './items.js';
 import { Missions } from './missions.js';
 import { Online } from './online.js';
-import { Wallet, BALL_STYLES } from './wallet.js';
+import { Wallet, CATALOG } from './wallet.js';
 
 const G = CONFIG.game;
 const COINS = CONFIG.coins;
@@ -60,7 +61,7 @@ const view = { width: 0, height: 0, dpr: 1 };
 let ball = new Ball();
 const flying = [];
 const hoop = new Hoop();
-const previewHoop = new Hoop(); // a still hoop for the Courts screen's pictures
+const previewHoop = new Hoop(); // a still hoop for the Customize screen's pictures
 const effects = new Effects();
 const audio = new SoundFX();
 const ui = new UI();
@@ -77,8 +78,11 @@ const game = {
   state: 'menu', // 'menu' | 'waiting' | 'playing' | 'gameover'
   mode: MODES.blitz,
   difficulty: DIFFICULTIES[loadJSON(KEYS.difficulty, 'normal')] ?? DIFFICULTIES.normal,
-  // Home court picked on the Courts screen. null = the difficulty's classic court (see courtId())
+  // Stadium picked on the Customize screen. null = the difficulty's classic court (see courtId())
   court: COURT_THEMES[loadJSON(KEYS.court, null)] ? loadJSON(KEYS.court, null) : null,
+  // Floor picked on the Customize screen. 'stadium' = the stadium's own (see floorId())
+  floor: FLOORS[loadJSON(KEYS.floor, null)] ? loadJSON(KEYS.floor, null) : 'stadium',
+  customizeTab: 'stadium', // the Customize screen's open tab: 'stadium' | 'floor' | 'ball'
   best: loadBests(), // best[modeId][difficultyId]
   lifetime: loadLifetime(), // lifetime[modeId][difficultyId] = baskets made ever
   match: null, // Blitz with Friends: { players: [{ name, rounds, total }], turn }
@@ -169,6 +173,9 @@ function currentBests() {
   return bests;
 }
 
+// Courts were free before stadiums cost coins: keep the one this device already picked
+if (game.court) wallet.grant('stadium', game.court);
+
 // ---------------------------------------------------------------------------
 // Screen size & Retina
 // ---------------------------------------------------------------------------
@@ -188,21 +195,25 @@ function resize() {
     c.height = Math.round(view.height * view.dpr);
   }
   redrawCourt();
-  if (ui.isShowing('courts')) drawCourtPictures(); // they're sized to the screen too
+  if (ui.isShowing('customize')) drawLookPictures(); // they're sized to the screen too
 }
 
-/** The court we play on: the one picked on the Courts screen, or the difficulty's classic. */
+/** The stadium we play in: the one picked on the Customize screen, or the difficulty's classic. */
 function courtId() {
-  return game.court ?? game.difficulty.id;
+  return game.court && wallet.owns('stadium', game.court) ? game.court : game.difficulty.id;
+}
+
+/** The floor we play on: the one picked on the Customize screen, or 'stadium' (the stadium's own). */
+function floorId() {
+  return wallet.owns('floor', game.floor) ? game.floor : 'stadium';
 }
 
 /** Redraw the cached background (after a new screen size, difficulty or court). */
 function redrawCourt() {
   fitCamera(view.width, view.height, hoop.baseZ);
   courtCtx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
-  drawCourt(courtCtx, view.width, view.height, hoop, courtId());
+  drawCourt(courtCtx, view.width, view.height, hoop, courtId(), floorId());
   hoop.setColors(courtTheme(courtId()).hoop);
-  ui.setCourt(courtId());
 }
 
 /** Switch difficulty: moves the hoop, refits the camera and redraws the court. */
@@ -219,35 +230,68 @@ function applyDifficulty(id) {
   if (ui.isShowing('friend')) showFriend(friendPage.username); // their bests too
 }
 
-// --- Courts ------------------------------------------------------------------
+// --- Customize: stadiums, floors and ball styles ------------------------------
 
-function showCourts() {
+/** Open the Customize screen on a tab ('stadium' | 'floor' | 'ball'). */
+function showCustomize(tab = game.customizeTab) {
   game.state = 'menu';
   newBall();
-  ui.renderCourts(courtId());
-  ui.showScreen('courts');
-  drawCourtPictures(); // after showing, so the canvases have a size
+  ui.showScreen('customize');
+  showCustomizeTab(tab);
+  syncScores(); // pick up coins from online wins (redraws the screen if it's open)
 }
 
-/** A court tile was tapped: it's your home court from now on. */
-function pickCourt(id) {
-  if (id === courtId()) return;
-  game.court = id;
-  saveJSON(KEYS.court, id);
-  audio.select();
-  redrawCourt();
-  ui.renderCourts(id);
-  drawCourtPictures(true);
+function showCustomizeTab(tab, note = null) {
+  game.customizeTab = tab;
+  const rebuilt = ui.renderCustomize(tab, wallet, { stadium: courtId(), floor: floorId() }, note);
+  // New tiles need their pictures; otherwise only the big preview can have changed
+  if (tab !== 'ball') drawLookPictures(!rebuilt);
 }
 
 /**
- * Draw the Courts screen's pictures: each court with its hoop, at the current
- * difficulty's hoop distance. `previewOnly` skips the tiles (they never change).
+ * A stadium, floor or ball was tapped: use it if you own it, otherwise buy it
+ * (after asking). kind = 'stadium' | 'floor' | 'ball'.
  */
-function drawCourtPictures(previewOnly = false) {
+function customizeItem(kind, id) {
+  const item = CATALOG[kind][id];
+  if (!wallet.owns(kind, id)) {
+    if (wallet.balance < item.price) {
+      return showCustomizeTab(kind, `You need ${item.price - wallet.balance} more coins for ${item.name}.`);
+    }
+    if (!confirm(`Buy the ${item.name} ${kind} for ${item.price} coins?`)) return;
+    wallet.buy(kind, id);
+    audio.buy();
+    syncScores(); // save the purchase to your account
+  } else {
+    audio.select();
+  }
+
+  if (kind === 'ball') {
+    wallet.equip(id);
+    ball.style = wallet.equipped;
+  } else {
+    if (kind === 'stadium') {
+      game.court = id;
+      saveJSON(KEYS.court, id);
+    } else {
+      game.floor = id;
+      saveJSON(KEYS.floor, id);
+    }
+    redrawCourt();
+  }
+  showCustomizeTab(kind);
+  showRecords();
+}
+
+/**
+ * Draw the Customize screen's pictures: each stadium/floor with its hoop, at the
+ * current difficulty's hoop distance. `previewOnly` skips the tiles.
+ */
+function drawLookPictures(previewOnly = false) {
   previewHoop.setDistance(game.difficulty.hoopZ, game.difficulty.hoopRange);
-  for (const target of ui.courtCanvases(previewOnly)) {
-    const id = target.dataset.court;
+  for (const target of ui.lookCanvases(previewOnly)) {
+    const court = target.dataset.court ?? courtId();
+    const floor = target.dataset.floor ?? floorId();
     const width = target.clientWidth;
     const height = target.clientHeight;
     if (!width || !height) continue;
@@ -257,8 +301,8 @@ function drawCourtPictures(previewOnly = false) {
     const c = target.getContext('2d');
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
     fitCamera(width, height, previewHoop.baseZ); // the camera is shared, so aim it at this picture
-    previewHoop.setColors(courtTheme(id).hoop);
-    drawCourt(c, width, height, previewHoop, id);
+    previewHoop.setColors(courtTheme(court).hoop);
+    drawCourt(c, width, height, previewHoop, court, floor);
     previewHoop.drawBack(c);
     previewHoop.drawFront(c);
   }
@@ -301,7 +345,7 @@ new SwipeInput(canvas, {
 
 ui.onModeSelect((modeId) => {
   if (modeId === 'hothand') showHotHandHub();
-  else if (modeId === 'friends') showFriendsSetup(loadJSON(KEYS.friendsTab, 'local'));
+  else if (modeId === 'friends') showOnline();
   else startGame(modeId);
 });
 ui.onDifficulty(applyDifficulty);
@@ -320,18 +364,17 @@ ui.onPlayAgain(() => {
 ui.onAuth(logIn);
 ui.onLogout(logOut);
 ui.onAddFriend(addFriend);
-ui.onOnlineList({ friend: showFriend, challenge: challengeFriend, play: playChallenge, decline: declineChallenge });
-ui.onFriendsTab((tab) => showFriendsSetup(tab));
+ui.onOnlineList({ friend: showFriend, challenge: pickChallenge, play: playChallenge, decline: declineChallenge });
+ui.onPassAndPlay({ open: showPassAndPlay, back: showOnline });
 ui.onFriendPage({
   back: showOnline,
-  challenge: () => challengeFriend(friendPage.username),
+  challenge: () => pickChallenge(friendPage.username),
   remove: () => removeFriend(friendPage.username),
 });
 ui.onCollect(collectReward);
-ui.onShop(showShop);
-ui.onCourts(showCourts);
-ui.onCourtPick(pickCourt);
-ui.onShopItem(shopItem);
+ui.onCustomize(showCustomize);
+ui.onCustomizeTab((tab) => showCustomizeTab(tab));
+ui.onCustomizeItem(customizeItem);
 ui.onItem(useItem);
 ui.onMute(() => ui.setMuted(audio.toggleMute()));
 ui.onLeave(leaveGame);
@@ -397,51 +440,26 @@ function showHotHandHub() {
   ui.showScreen('hothand');
 }
 
-// --- Shop --------------------------------------------------------------------
-
-function showShop() {
-  game.state = 'menu';
-  newBall();
-  ui.renderShop(wallet);
-  ui.showScreen('shop');
-  syncScores(); // pick up coins from online wins (redraws the shop if it's open)
-}
-
-/** A ball in the Shop was tapped: use it if you own it, otherwise buy it. */
-function shopItem(id) {
-  const style = BALL_STYLES[id];
-  if (wallet.owns(id)) {
-    wallet.equip(id);
-    audio.select();
-  } else if (wallet.balance < style.price) {
-    return ui.renderShop(wallet, `You need ${style.price - wallet.balance} more coins for ${style.name}.`);
-  } else if (confirm(`Buy the ${style.name} ball for ${style.price} coins?`)) {
-    wallet.buy(id);
-    audio.buy();
-    syncScores(); // save the purchase to your account
-  }
-  ball.style = wallet.equipped;
-  ui.renderShop(wallet);
-  showRecords();
-}
-
 /**
- * Blitz with Friends: `tab` is 'local' (pass and play on this phone) or
- * 'online' (log in, challenges, friends). The last tab used is remembered.
+ * Blitz with Friends: log in, your stats, friends and challenges.
+ * Pass and play (two players on this phone) has its own screen.
  */
-function showFriendsSetup(tab) {
+function showOnline() {
   game.state = 'menu';
   game.challenge = null;
   newBall();
-  saveJSON(KEYS.friendsTab, tab);
-  ui.setPlayerNames(loadJSON(KEYS.playerNames, []));
   ui.showScreen('friends');
-  ui.setFriendsTab(tab);
-  if (tab === 'online') {
-    ui.showOnlineError(null);
-    renderOnline();
-    refreshOnline();
-  }
+  ui.showOnlineError(null);
+  renderOnline();
+  refreshOnline();
+}
+
+/** Pass and play setup: difficulty and the two names. */
+function showPassAndPlay() {
+  game.state = 'menu';
+  newBall();
+  ui.setPlayerNames(loadJSON(KEYS.playerNames, []));
+  ui.showScreen('passplay');
 }
 
 /** What the mission cards need to show (the reward stays secret). */
@@ -503,11 +521,6 @@ function endRound() {
 }
 
 // --- Online ----------------------------------------------------------------------
-
-/** The Online tab of Blitz with Friends. */
-function showOnline() {
-  showFriendsSetup('online');
-}
 
 function renderOnline() {
   ui.renderOnline({ username: online.username, ...onlineView });
@@ -600,8 +613,9 @@ async function syncScores() {
   }
   if (saved.wallet) wallet.merge(saved.wallet, switching);
   saveJSON(KEYS.recordsOwner, username);
+  if (switching) redrawCourt(); // the new account may not own this device's stadium or floor
   if (!inGame()) showRecords();
-  if (ui.isShowing('shop')) ui.renderShop(wallet);
+  if (ui.isShowing('customize')) showCustomizeTab(game.customizeTab);
 }
 
 async function addFriend(username, clearInput) {
@@ -624,6 +638,15 @@ async function removeFriend(username) {
     return ui.showOnlineError(err.message);
   }
   refreshOnline();
+}
+
+/** Challenge (or Rematch) tapped: pick a difficulty first, then play. */
+function pickChallenge(username) {
+  ui.showChallengePicker(username, game.difficulty.id, (difficulty) => {
+    ui.showScreen(null); // so applyDifficulty() doesn't reload the friend page
+    applyDifficulty(difficulty);
+    challengeFriend(username);
+  });
 }
 
 /** Start a NEW challenge: you play first, it's sent when your game ends. */
@@ -760,7 +783,7 @@ function leaveGame() {
 
   if (mode.passAndPlay) {
     game.match = null;
-    showFriendsSetup('local');
+    showPassAndPlay();
   } else if (mode.online) {
     showOnline(); // a new challenge that was never sent
   } else if (mode.missions) {

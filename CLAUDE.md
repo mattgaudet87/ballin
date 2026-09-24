@@ -47,8 +47,8 @@ js/
   modes.js     MODES (Blitz, Hot Hand, Blitz with Friends, Free Throw, Online) + their rule flags, DIFFICULTIES, basket multipliers.
                Also imported by api/ (no DOM code in it!)
   online.js    Online class: fetch wrapper for /api/*, keeps { username, token } in localStorage
-  wallet.js    Coins (earned/spent/bonus, balance) + BALL_STYLES the Shop sells (looks only) + which one is equipped.
-               Also imported by api/ and ball.js
+  wallet.js    Coins (earned/spent/bonus, balance) + what they buy on the Customize screen (CATALOG: BALL_STYLES here,
+               stadiums/floors from court.js; looks only), what you own + which ball is equipped. Also imported by api/ and ball.js
   items.js     Power-ups: specialty balls + energy drinks (ITEMS, DRINK_EFFECTS) and the Inventory class (counts, active boosts, persistence)
   missions.js  Hot Hand missions: templates, 3 active, progress, completed → collect() rolls the hidden reward
   camera.js    3D → 2D projection (project, unprojectX), projectHoop (drawing cheat near the hoop), fitCamera()
@@ -57,11 +57,12 @@ js/
   ball.js      Ball state (position, velocity, per-shot flags) and drawing (shading, spinning 3D seams, Shop style colors)
   hoop.js      Hoop state, side-to-side movement, rim size (White Monster), net spring, multiplier badge, coin, drawing (back/front layers).
                Colors can be themed per court (setColors)
-  court.js     Background: brick wall, hardwood floor, court lines, lighting. COURT_THEMES = the 9 pickable courts
-               (6 new + the 3 classics easy/normal/hard). Drawn once into a cached canvas on resize / difficulty / court change
+  court.js     Background: brick wall, floor, court lines, lighting. COURT_THEMES = the 9 stadiums (6 for coins + the 3 free
+               classics easy/normal/hard), FLOORS = floor surfaces for any stadium. Drawn once into a cached canvas on
+               resize / difficulty / stadium / floor change. No DOM code (wallet.js, and so api/, imports it)
   input.js     Pointer events (touch + mouse) → swipe { dx, dy, speed } → onShoot callback
-  ui.js        HTML overlays: home, Shop, Courts picker, Hot Hand hub (missions + locker), Blitz with Friends (Pass and play / Online tabs),
-               friend page, handoff/results, game over, reward popup, HUD, trays
+  ui.js        HTML overlays: home, Customize (Stadium / Floors / Balls tabs), Hot Hand hub (missions + locker), Blitz with Friends
+               (online + Pass and play button), Pass and play setup, friend page, handoff/results, game over, popups, HUD, trays
   audio.js     Web Audio sound effects (synthesized, no files) + mute (saved to localStorage)
   effects.js   Particles, fire trail, floating text, screen shake, on-fire edge glow (screen space)
   storage.js   try/catch-wrapped localStorage helpers (numbers, booleans, JSON)
@@ -87,14 +88,15 @@ js/
   "Tap to start" screen (`#tap-start`). One tap calls `beginPlay()`, which starts the clock.
   Blitz with Friends skips it (`tapToStart: false`) because the handoff screen's
   I'm Ready button already is the tap to start. `inGame()` is true in both `waiting` and `playing`.
-- **Screens:** home (difficulty picker + 4 mode cards in a 2×2 grid) → Blitz and Free Throw start
-  right away. Hot Hand opens its hub (play, missions, locker). Blitz with Friends opens
-  `showFriendsSetup(tab)` with two tabs (last one saved in `ballin.friendsTab`):
-  **Pass and play** (names → handoff → round → … → results) and **Online** (login form, or
-  Friends with a "+ Add friend" button, then Challenges). Tapping a friend opens the friend page
+- **Screens:** home (Customize button top left, difficulty picker + 4 mode cards) → Blitz and Free Throw start
+  right away. Hot Hand opens its hub (play, missions, locker). Blitz with Friends opens `showOnline()`: the
+  login form, or Your stats (W/L/T summed over friends), Friends with a "+ Add friend" button, a teal
+  **PASS AND PLAY** button (`[data-passplay]`, also under the login form), then Challenges. Pass and play opens
+  its own screen (`showPassAndPlay()`: difficulty picker + names → handoff → round → … → results).
+  Online has no difficulty picker: CHALLENGE/REMATCH opens `pickChallenge()`'s difficulty popup (`#challenge-popup`). Tapping a friend opens the friend page
   (`showFriend()`: W/L/T, head-to-head averages/highs, their bests, game history). Only one
   `.overlay` screen shows at a time (`ui.showScreen(name)`). "Your turn" counts show as red
-  badges on the Blitz with Friends card and the Online tab (`ui.setOnlineStatus()`).
+  badge on the Blitz with Friends card (`ui.setOnlineStatus()`).
 - **Modes** (`game.mode`, from modes.js):
   - **Blitz** is 60 seconds on the clock. On Hard only, the hoop starts moving at 10 points
     (`movingHoop.difficulties: ['hard']`; `hoopRule()` in main.js applies it). Friends and
@@ -152,14 +154,19 @@ js/
   ×2 with a Blue Monster (`shot.coinBoost`). Winning an online challenge gives `coins.onlineWin`; the server
   adds it to `wallets.bonus` in `finish` (so the challenger gets it on their next sync). The wallet counts
   `earned`, `spent` and `bonus`, which only go up, so `syncScores()` can keep the MAX of each like records do
-  (balance = earned + bonus − spent). The home screen's coin button opens the **Shop** (`showShop()`), which
-  sells ball styles (`BALL_STYLES`): cosmetic, used in every mode (`ball.style`). A loaded Gold/Silver/Bronze
-  ball still shows its own colors.
-- **Courts** (court.js + `showCourts()`/`pickCourt()` in main.js): the home screen's Court button opens the
-  **Courts** screen (a big preview + a tile per court, drawn by `drawCourtPictures()` with a still `previewHoop`,
-  borrowing the shared camera and fitting it back after). The picked court (`game.court`, saved in `ballin.court`)
-  replaces the difficulty's court in every mode. Unset = each difficulty's classic (`courtId()` falls back to the
-  difficulty id). A theme can also set `hoop` colors (`hoop.setColors()`), `mote` (dust tint in `drawMotes`) and
+  (balance = earned + bonus − spent). Coins buy things on the Customize screen (`CATALOG` in wallet.js:
+  `ball`, `stadium`, `floor`; price 0 = free and always owned). `wallet.owns(kind, id)` / `buy(kind, id)`; the
+  owned list stores ball ids as-is ('ice') and the rest as 'kind:id' ('stadium:inferno'). The server keeps any
+  id `isOwnedKey()` accepts. Ball styles are cosmetic, used in every mode (`ball.style`). A loaded
+  Gold/Silver/Bronze ball still shows its own colors.
+- **Customize** (`showCustomize(tab)` / `customizeItem(kind, id)` in main.js): the home screen's Customize button
+  (top left) opens it on **Stadium**; the coin button opens it on **Balls**. Stadium and Floors share a big preview
+  + a tile per choice, drawn by `drawLookPictures()` with a still `previewHoop`, borrowing the shared camera and
+  fitting it back after. A stadium tile uses the floor in use and a floor tile the stadium in use. Tapping an owned
+  one uses it; otherwise it asks, then buys. The picked stadium (`game.court`, `ballin.court`) replaces the
+  difficulty's court in every mode. Unset or not owned = each difficulty's classic (`courtId()` falls back to the
+  difficulty id). The picked floor (`game.floor`, `ballin.floor`, `floorId()`) goes in any stadium; 'stadium' = its own
+  wood. Courts picked before stadiums cost coins are granted for free at startup. A theme can also set `hoop` colors (`hoop.setColors()`), `mote` (dust tint in `drawMotes`) and
   `grade` (FX color grade). `redrawCourt()` redraws the cached background and hoop colors after any change.
 - **Scoring** (`onMake()` in main.js): (1 + swish bonus) × fire 2× × basket multiplier ×
   specialty ball × Green Monster multiplier, rounded. Each extra multiplier shows as a label under "+N".
@@ -186,7 +193,7 @@ js/
 - **Leave button** (`#leave-btn`, `leaveGame()` in main.js): shown in every mode during a game.
   It asks to confirm, then quits without a result (no game over, best or mission progress;
   lifetime baskets are kept) and goes back to where the game started: home, the Hot Hand hub,
-  friends setup (the pass-and-play match is dropped) or the Online tab. Two exceptions: Free
+  the Pass and play screen (the match is dropped) or Blitz with Friends. Two exceptions: Free
   Throw's button says END and shows results (`endGame()`), and leaving while answering an
   online challenge sends your score so far (so you can't quit and replay for a better one).
 - **Rapid fire / ball states:** `ball` (main.js, a `let`) is the ball waiting at the bottom;
@@ -240,8 +247,8 @@ js/
   then handle it in the event loop inside `updateFlyingBall()`.
 - **New online feature:** add an `api/<name>.js` using `endpoint()` from `_lib/auth.js` and
   `query()` from `_lib/db.js` (new tables go in `SCHEMA` with `IF NOT EXISTS`), a method in
-  online.js, then UI in ui.js/main.js. Test locally with `node tools/dev.mjs` (edits in `api/_lib/`
-  need a server restart).
+  online.js, then UI in ui.js/main.js. Test locally with `node tools/dev.mjs` (edits in `api/_lib/`,
+  or in `js/` files that api/ imports like wallet.js/court.js/modes.js, need a server restart).
 - **New game mode:** add an entry to `MODES` in modes.js (reuse the existing flags where you can),
   and add a `.mode-card` with `data-mode="<id>"` plus `data-best`/`data-lifetime` spans to index.html.
   Route it in the `ui.onModeSelect` handler in main.js. New rule flags need branches in main.js.
@@ -251,11 +258,13 @@ js/
   `Inventory.startShot()` (snapshot) and use it in main.js (`onMake()`, `boostOn()` or `hoopSpeed()`).
   Give it a CSS icon (`.icon-ball.<id>` or `.icon-can.<id> { --can: color }`) and add it to
   `REWARD_WEIGHTS` in missions.js so missions can award it. `comingSoon: true` greys an item out.
-- **New ball style for the Shop:** add it to `BALL_STYLES` in wallet.js (name, price, colors, seam,
-  optional `glow`). The Shop card and in-game drawing pick it up automatically.
+- **New ball style:** add it to `BALL_STYLES` in wallet.js (name, price, colors, seam,
+  optional `glow`). The Balls tab card and in-game drawing pick it up automatically.
 - **Coin odds/values:** `CONFIG.coins` in config.js.
-- **New court:** add an entry (with a `name`) to `COURT_THEMES` in court.js. Key order = picker order. The
-  Courts tile, dot color (from `paint`) and in-game look pick it up automatically.
+- **New stadium:** add an entry (with a `name` and `price`) to `COURT_THEMES` in court.js. Key order = picker order.
+  The Stadium tile, dot color (from `paint`), shop and in-game look pick it up automatically.
+- **New floor:** add an entry to `FLOORS` in court.js (`name`, `price`, and `wood: [r, g, b]` for planks or
+  `solid: [r, g, b]` with optional `speckle`/`grid`). New looks go in `drawSolidFloor()`/`drawPlanks()`.
 - **New mission type:** add a template to `TEMPLATES` in missions.js. If it needs a new stat, count it
   on `game` in main.js (reset it in `startGame()`) and add it to `gameStats()`.
 - **New overlay/HUD item:** markup in index.html, styles in style.css, and a method in ui.js
