@@ -55,6 +55,16 @@ const SCHEMA = [
     count INTEGER NOT NULL,
     PRIMARY KEY (user_id, mode, difficulty)
   )`,
+  // Coins (see js/wallet.js). earned/spent only ever go up, so syncing keeps
+  // the higher of each. bonus = coins the server gave for online wins.
+  // owned = the ball styles bought, as a JSON list like ["ice","lava"].
+  `CREATE TABLE IF NOT EXISTS wallets (
+    user_id INTEGER PRIMARY KEY,
+    earned INTEGER NOT NULL DEFAULT 0,
+    spent INTEGER NOT NULL DEFAULT 0,
+    bonus INTEGER NOT NULL DEFAULT 0,
+    owned TEXT NOT NULL DEFAULT '[]'
+  )`,
   // The first version counted baskets per mode only (replaced by `lifetime`;
   // each phone re-uploads its counts, so nothing is lost).
   `DROP TABLE IF EXISTS baskets`,

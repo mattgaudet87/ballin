@@ -40,6 +40,7 @@
         <span id="score">0</span>
         <span id="best-small">BEST 0</span>
         <span id="lifetime-small" class="lifetime-small">🏀 0</span>
+        <span class="lifetime-small coins-small"><span class="mini-coin" aria-hidden="true"></span><span id="coins-small">0</span></span>
       </div>
       <div class="hud-center">
         <span id="timer">60</span>
@@ -82,7 +83,10 @@
           <div class="hero-ball" aria-hidden="true"></div>
           <h1 class="title">BALLIN'</h1>
           <p class="tagline">Flick to shoot. Aim is everything.</p>
-          <div class="lifetime-total"><span class="mini-ball" aria-hidden="true"></span><b id="lifetime-total">0</b> lifetime baskets</div>
+          <div class="hero-pills">
+            <div class="lifetime-total"><span class="mini-ball" aria-hidden="true"></span><b id="lifetime-total">0</b> lifetime baskets</div>
+            <button id="shop-btn" class="lifetime-total coin-pill" type="button"><span class="mini-coin" aria-hidden="true"></span><b id="coin-total">0</b> Shop ›</button>
+          </div>
         </header>
 
         <!-- Each difficulty is a venue: the dot is that court's lane paint (court.js COURT_THEMES) -->
@@ -122,7 +126,7 @@
           </button>
         </div>
 
-        <p class="how">Swipe up on the ball to shoot · Swish = bonus point · 3 in a row = on fire (2×)</p>
+        <p class="how">Swipe up on the ball to shoot · Swish = bonus point · 3 in a row = on fire (2×) · Coin in the hoop? Make it to grab it</p>
       </div>
     </section>
 
@@ -151,6 +155,20 @@
         <h2 id="locker-title" class="section-title">Locker</h2>
         <div id="locker" class="locker"></div>
         <p class="how">Tap power-ups on the sides of the screen during a run.</p>
+      </div>
+    </section>
+
+    <!-- Shop: spend coins on ball styles -->
+    <section id="shop-screen" class="overlay scroll hidden">
+      <div class="panel">
+        <button class="back-btn" type="button" data-back aria-label="Back">‹</button>
+        <h1 class="mode-title shop-text">SHOP</h1>
+        <p class="tagline">Make baskets with a coin in the hoop, or beat friends online, to earn coins.</p>
+        <div class="coin-balance"><span class="mini-coin" aria-hidden="true"></span><b id="shop-coins">0</b> coins</div>
+        <p id="shop-note" class="form-error hidden"></p>
+        <h2 class="section-title">Ball styles</h2>
+        <div id="shop-list" class="shop-list"></div>
+        <p class="how">Styles change how your ball looks in every mode. Tap one you own to use it. A Blue Monster (Hot Hand) makes coins worth 2×.</p>
       </div>
     </section>
 
@@ -267,7 +285,7 @@
         <div id="final-score" class="final-score">0</div>
         <div id="new-best" class="new-best hidden">NEW BEST!</div>
         <p id="gameover-note" class="gameover-note hidden"></p>
-        <div class="best-pill">BEST <strong id="stat-best">0</strong> · 🏀 <strong id="stat-lifetime">0</strong></div>
+        <div class="best-pill">BEST <strong id="stat-best">0</strong> · 🏀 <strong id="stat-lifetime">0</strong><span id="stat-coins-wrap" class="hidden"> · <span class="mini-coin" aria-hidden="true"></span><strong id="stat-coins">+0</strong></span></div>
         <div class="stats">
           <div><span id="stat-makes">0/0</span><small>Makes</small></div>
           <div><span id="stat-accuracy">–</span><small>Accuracy</small></div>

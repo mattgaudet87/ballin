@@ -11,6 +11,7 @@
  */
 import { CONFIG, FX } from './config.js';
 import { project, projectHoop } from './camera.js';
+import { BALL_STYLES } from './wallet.js';
 
 const TAU = Math.PI * 2;
 
@@ -62,6 +63,8 @@ const SKINS = {
   bronze: ['#ffd2a8', '#c97a3d', '#6b3814'],
 };
 
+const SEAM_COLOR = 'rgba(45, 20, 6, 0.9)';
+
 /** Ease-out with a small overshoot, used for the "pop in" animation. */
 function easeOutBack(t) {
   const c = 1.7;
@@ -92,6 +95,8 @@ export class Ball {
     this.spawn = 0; // 0 → 1 "pop in" animation progress
     this.flightTime = 0;
     this.skin = null; // 'gold' | 'silver' | 'bronze' | null (set by main.js)
+    // The ball style bought in the Shop (wallet.js). main.js sets it on every new ball.
+    this.style = this.style ?? 'classic';
     this.trail = []; // FX: recent screen positions for the motion trail
 
     // Per-shot flags used for scoring
@@ -176,18 +181,22 @@ export class Ball {
     ctx.save();
     ctx.translate(s.x, s.y);
 
-    // Glow when on fire, or shimmer when it's a specialty ball
+    // Glow when on fire, or shimmer when it's a specialty ball or a glowing style
+    const [light, mid, edge] = this.colors(time, onFire);
+    const style = BALL_STYLES[this.style] ?? BALL_STYLES.classic;
     if (this.skin) {
-      ctx.shadowColor = SKINS[this.skin][1];
+      ctx.shadowColor = mid;
       ctx.shadowBlur = r * (0.6 + Math.sin(time * 6) * 0.2);
     } else if (onFire) {
       ctx.shadowColor = 'rgba(255, 120, 20, 0.95)';
       ctx.shadowBlur = r * 0.9;
+    } else if (style.glow) {
+      ctx.shadowColor = mid;
+      ctx.shadowBlur = r * 0.45;
     }
 
-    // Base orange ball with a light-to-dark gradient for a round look
+    // Base ball with a light-to-dark gradient for a round look
     const base = ctx.createRadialGradient(-r * 0.35, -r * 0.4, r * 0.1, 0, 0, r);
-    const [light, mid, edge] = SKINS[this.skin ?? (onFire ? 'fire' : 'normal')];
     base.addColorStop(0, light);
     base.addColorStop(0.55, mid);
     base.addColorStop(1, edge);
@@ -201,7 +210,7 @@ export class Ball {
     ctx.save();
     ctx.clip();
     ctx.rotate(Math.max(-0.5, Math.min(0.5, this.vx * 0.08))); // lean with sideways motion
-    this.drawSeams(ctx, r);
+    this.drawSeams(ctx, r, this.skin ? SEAM_COLOR : style.seam);
     ctx.restore();
 
     // Edge shading + a small shine on top for depth
@@ -225,7 +234,7 @@ export class Ball {
     }
     this.trail.push({ x: s.x, y: s.y, r: s.r });
     if (this.trail.length > 7) this.trail.shift();
-    const color = SKINS[this.skin ?? (onFire ? 'fire' : 'normal')][1];
+    const color = this.colors(performance.now() / 1000, onFire)[1];
     ctx.save();
     ctx.fillStyle = color;
     const n = this.trail.length;
@@ -240,14 +249,29 @@ export class Ball {
     ctx.restore();
   }
 
+  /**
+   * [highlight, middle, edge] colors right now: a loaded specialty ball wins,
+   * then the Shop style. The classic ball turns hotter while you're on fire.
+   */
+  colors(time, onFire) {
+    if (this.skin) return SKINS[this.skin];
+    const style = BALL_STYLES[this.style] ?? BALL_STYLES.classic;
+    if (style.rainbow) {
+      const hue = (time * 90) % 360; // goes all the way round every 4 seconds
+      return [`hsl(${hue}, 100%, 80%)`, `hsl(${hue}, 90%, 55%)`, `hsl(${hue}, 80%, 25%)`];
+    }
+    if (this.style === 'classic' || !style.colors) return SKINS[onFire ? 'fire' : 'normal'];
+    return style.colors;
+  }
+
   /** Rotate the 3D seam circles by the current spin and draw the visible half. */
-  drawSeams(ctx, r) {
+  drawSeams(ctx, r, color = SEAM_COLOR) {
     const cs = Math.cos(this.spin);
     const ss = Math.sin(this.spin);
     const cy = Math.cos(VIEW_YAW);
     const sy = Math.sin(VIEW_YAW);
 
-    ctx.strokeStyle = 'rgba(45, 20, 6, 0.9)';
+    ctx.strokeStyle = color;
     ctx.lineWidth = Math.max(1, r * 0.075);
     ctx.lineCap = 'round';
     ctx.beginPath();

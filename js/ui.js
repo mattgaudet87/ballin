@@ -2,7 +2,7 @@
  * ui.js
  * ---------------------------------------------------------------------------
  * Everything drawn with regular HTML instead of the canvas:
- *   - menu screens: home, Hot Hand hub (missions + locker), Blitz with
+ *   - menu screens: home, Shop (ball styles), Hot Hand hub (missions + locker), Blitz with
  *     Friends (pass-and-play names, or online: login, challenges, friends),
  *     a friend's page, pass-the-phone handoff, friends results, game over
  *   - the reward popup
@@ -15,6 +15,7 @@
  */
 import { CONFIG } from './config.js';
 import { ITEMS, BALL_IDS, DRINK_IDS } from './items.js';
+import { BALL_STYLES, STYLE_IDS } from './wallet.js';
 
 const $ = (id) => document.getElementById(id);
 const $$ = (selector) => document.querySelectorAll(selector);
@@ -22,6 +23,7 @@ const $$ = (selector) => document.querySelectorAll(selector);
 /** Menu screens by name (only one is visible at a time). */
 const SCREENS = {
   home: 'home-screen',
+  shop: 'shop-screen',
   hothand: 'hothand-screen',
   friends: 'friends-screen',
   friend: 'friend-screen',
@@ -44,6 +46,13 @@ export class UI {
       score: $('score'),
       bestSmall: $('best-small'),
       lifetimeSmall: $('lifetime-small'),
+      coinsSmall: $('coins-small'),
+      coinTotal: $('coin-total'),
+      shopCoins: $('shop-coins'),
+      shopList: $('shop-list'),
+      shopNote: $('shop-note'),
+      statCoinsWrap: $('stat-coins-wrap'),
+      statCoins: $('stat-coins'),
       timer: $('timer'),
       streak: $('streak'),
       hint: $('hint'),
@@ -112,6 +121,19 @@ export class UI {
   /** Back arrows (on the Hot Hand and friends screens) and "Menu" buttons. */
   onHome(callback) {
     $$('[data-back], [data-home], #menu-btn').forEach((btn) => btn.addEventListener('click', callback));
+  }
+
+  /** The coins button on the home screen. */
+  onShop(callback) {
+    $('shop-btn').addEventListener('click', callback);
+  }
+
+  /** callback(styleId) when a ball in the Shop is tapped. */
+  onShopItem(callback) {
+    this.el.shopList.addEventListener('click', (e) => {
+      const button = e.target.closest('[data-style]');
+      if (button) callback(button.dataset.style);
+    });
   }
 
   onHotHandPlay(callback) {
@@ -290,6 +312,21 @@ export class UI {
     $('lifetime-total').textContent = total.toLocaleString();
   }
 
+  /** Your coin balance on the home screen's Shop button. */
+  setCoins(balance) {
+    this.el.coinTotal.textContent = balance.toLocaleString();
+  }
+
+  /**
+   * Fill the Shop: every ball style with its price, or OWNED / IN USE.
+   * `note` is an optional message (e.g. "You need 40 more coins").
+   */
+  renderShop(wallet, note = null) {
+    this.el.shopCoins.textContent = wallet.balance.toLocaleString();
+    showMessage(this.el.shopNote, note);
+    this.el.shopList.innerHTML = STYLE_IDS.map((id) => shopCard(id, wallet)).join('');
+  }
+
   /** Fill the Hot Hand hub's missions and locker. */
   renderHotHandHub(missions, inventory) {
     this.el.hubMissions.innerHTML = missions.map((m, i) => missionCard(m, i)).join('');
@@ -337,6 +374,7 @@ export class UI {
     e.statSwishes.textContent = stats.swishes;
     e.statStreak.textContent = stats.bestStreak;
     e.newBest.classList.toggle('hidden', !stats.isNewBest);
+    this.setGameOverCoins(stats.coins ?? 0);
 
     e.gameOverMissionsBlock.classList.toggle('hidden', !stats.missions);
     if (stats.missions) {
@@ -453,6 +491,12 @@ export class UI {
     showMessage(this.el.onlineError, message);
   }
 
+  /** Coins earned this game, next to BEST on the game over screen (hidden when 0). */
+  setGameOverCoins(coins) {
+    this.el.statCoins.textContent = `+${coins}`;
+    this.el.statCoinsWrap.classList.toggle('hidden', !coins);
+  }
+
   /** Update the line under the score on the game over screen (online results). */
   setGameOverNote(text) {
     showMessage(this.el.gameOverNote, text);
@@ -500,12 +544,14 @@ export class UI {
    * @param sub     line under the score ("BEST 12" or "ROUND 1 OF 2")
    * @param center  what shows in the middle pill (seconds left, or the run count)
    * @param leaveLabel text on the corner button ("✕ LEAVE", or "END" in Free Throw)
+   * @param coins   your coin balance
    */
-  updateHUD({ label, score, sub, lifetime, center, lowTime, streak, onFire, leaveLabel }) {
+  updateHUD({ label, score, sub, lifetime, center, lowTime, streak, onFire, leaveLabel, coins }) {
     this.setText('hudLabel', label);
     this.setText('score', score);
     this.setText('bestSmall', sub);
     this.setText('lifetimeSmall', `🏀 ${lifetime}`);
+    this.setText('coinsSmall', coins);
     this.setText('timer', center);
     this.el.timer.classList.toggle('low', lowTime);
 
@@ -584,6 +630,24 @@ function missionCard(mission, index) {
     <div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div>
     <button type="button" class="collect-btn" data-collect="${index}">🎁 COLLECT REWARD</button>
   </div>`;
+}
+
+/** A ball style in the Shop: a preview ball, its name, and the price or whether it's yours. */
+function shopCard(id, wallet) {
+  const style = BALL_STYLES[id];
+  const owned = wallet.owns(id);
+  const inUse = wallet.equipped === id;
+  const tooMuch = !owned && wallet.balance < style.price;
+  const status = inUse ? '✓ IN USE' : owned ? 'OWNED · TAP TO USE' : `<span class="mini-coin" aria-hidden="true"></span>${style.price.toLocaleString()}`;
+  const [light, mid, edge] = style.colors ?? ['#ffb3b3', '#ff3d3d', '#6b0000']; // rainbow cycles in CSS
+  const colors = `--light:${light};--mid:${mid};--edge:${edge};--seam:${style.seam}`;
+  const classes = ['shop-card', inUse && 'in-use', owned && 'owned', tooMuch && 'locked'].filter(Boolean).join(' ');
+  const ballClasses = ['shop-ball', style.glow && 'glow', style.rainbow && 'rainbow'].filter(Boolean).join(' ');
+  return `<button type="button" class="${classes}" data-style="${id}">
+    <span class="${ballClasses}" style="${colors}" aria-hidden="true"></span>
+    <span class="shop-name">${style.name}</span>
+    <span class="shop-price">${status}</span>
+  </button>`;
 }
 
 /** A tile in the locker showing how many of an item you own. */
@@ -701,7 +765,7 @@ function challengeRow(c) {
       `<button type="button" class="row-btn go" data-action="play" data-value="${c.id}">PLAY</button>
        <button type="button" class="row-x" data-action="decline" data-value="${c.id}" aria-label="Decline">×</button>`],
     waiting: [`vs ${name}`, `You scored ${c.myScore} · waiting for them · ${diff}`, ''],
-    won: [`You beat ${name}`, `${score} · ${diff}`, rematch(name)],
+    won: [`You beat ${name}`, `${score} · ${diff} · +${CONFIG.coins.onlineWin} coins`, rematch(name)],
     lost: [`${name} beat you`, `${score} · ${diff}`, rematch(name)],
     tie: [`Tie with ${name}`, `${score} · ${diff}`, rematch(name)],
     declined: [`vs ${name}`, `They passed · ${diff}`, rematch(name)],

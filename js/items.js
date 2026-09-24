@@ -28,7 +28,7 @@ export const ITEMS = {
   white: { type: 'drink', name: 'White Monster', shots: 10, desc: 'Bigger hoop for 10 shots' },
   green: { type: 'drink', name: 'Green Monster', shots: 10, desc: 'Multiplier climbs every shot for 10 shots' },
   orange: { type: 'drink', name: 'Orange Monster', shots: 10, desc: 'Moving hoop 25% slower for 10 shots' },
-  blue: { type: 'drink', name: 'Blue Monster', shots: 10, desc: 'Coin booster — coming soon', comingSoon: true },
+  blue: { type: 'drink', name: 'Blue Monster', shots: 10, desc: '2× coins for 10 shots' },
 };
 
 export const BALL_IDS = ['gold', 'silver', 'bronze'];
@@ -119,6 +119,7 @@ export class Inventory {
       ballMultiplier: this.selectedBall ? ITEMS[this.selectedBall].multiplier : 1,
       bigHoop: this.isActive('white'),
       slowHoop: this.isActive('orange'),
+      coinBoost: this.isActive('blue'),
       greenMultiplier: 1,
       itemsUsed: this.selectedBall ? 1 : 0,
     };

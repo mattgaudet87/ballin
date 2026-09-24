@@ -36,27 +36,30 @@ api/                   Vercel serverless functions (server side of online play)
   account.js           /api/account: signup, login, logout, who am I
   _lib/challenge-view.js  SELECT for challenges + fromMySide() + record() (shared by challenges.js and friends.js)
   friends.js           /api/friends: list (bests + W/L/T record), ?username= friend page (history), add, remove
-  scores.js            /api/scores: upload bests + lifetime baskets (server keeps the MAX), download
-  challenges.js        /api/challenges: list, create, finish, decline
+  scores.js            /api/scores: upload bests + lifetime baskets + wallet (server keeps the MAX), download
+  challenges.js        /api/challenges: list, create, finish (winner gets CONFIG.coins.onlineWin), decline
 tools/dev.mjs          Local server: static files + api/ (same as Vercel)
 icons/                 App icons (PNG 180/192/512 + SVG favicon)
 tools/make_icons.py    Regenerates the PNG icons (pure Python, no libraries)
 js/
-  config.js    Tunable numbers shared by everything: world sizes, camera, bounciness, shot feel, shared scoring rules, timings, storage keys
+  config.js    Tunable numbers shared by everything: world sizes, camera, bounciness, shot feel, shared scoring rules, coins, timings, storage keys.
+               Also imported by api/ (no DOM code in it!)
   modes.js     MODES (Blitz, Hot Hand, Blitz with Friends, Free Throw, Online) + their rule flags, DIFFICULTIES, basket multipliers.
                Also imported by api/ (no DOM code in it!)
   online.js    Online class: fetch wrapper for /api/*, keeps { username, token } in localStorage
+  wallet.js    Coins (earned/spent/bonus, balance) + BALL_STYLES the Shop sells (looks only) + which one is equipped.
+               Also imported by api/ and ball.js
   items.js     Power-ups: specialty balls + energy drinks (ITEMS, DRINK_EFFECTS) and the Inventory class (counts, active boosts, persistence)
   missions.js  Hot Hand missions: templates, 3 active, progress, completed → collect() rolls the hidden reward
   camera.js    3D → 2D projection (project, unprojectX), projectHoop (drawing cheat near the hoop), fitCamera()
   main.js      Entry point: setup, screens/menus flow, friends match, game-state machine, main loop, scoring rules, power-ups, render order
   physics.js   aimShot() swipe → launch velocity; stepBall() gravity, rim/board/floor/wall collisions, score detection
-  ball.js      Ball state (position, velocity, per-shot flags) and drawing (shading, spinning 3D seams)
-  hoop.js      Hoop state, side-to-side movement, rim size (White Monster), net spring, multiplier badge, drawing (back/front layers)
+  ball.js      Ball state (position, velocity, per-shot flags) and drawing (shading, spinning 3D seams, Shop style colors)
+  hoop.js      Hoop state, side-to-side movement, rim size (White Monster), net spring, multiplier badge, coin, drawing (back/front layers)
   court.js     Background: brick wall, hardwood floor, court lines, lighting. COURT_THEMES has one look per
                difficulty. Drawn once into a cached canvas on resize / difficulty change
   input.js     Pointer events (touch + mouse) → swipe { dx, dy, speed } → onShoot callback
-  ui.js        HTML overlays: home, Hot Hand hub (missions + locker), Blitz with Friends (Pass and play / Online tabs),
+  ui.js        HTML overlays: home, Shop, Hot Hand hub (missions + locker), Blitz with Friends (Pass and play / Online tabs),
                friend page, handoff/results, game over, reward popup, HUD, trays
   audio.js     Web Audio sound effects (synthesized, no files) + mute (saved to localStorage)
   effects.js   Particles, fire trail, floating text, screen shake, on-fire edge glow (screen space)
@@ -142,6 +145,15 @@ js/
     whose records the device holds. If a different account logs in, the device takes that
     account's records instead of uploading the previous player's.
   - Scores are trusted from the client (casual game). There's no rate limiting on login yet.
+- **Coins** (wallet.js + main.js): every new ball in every mode has a `CONFIG.coins.chance` (30%) of a
+  coin floating above the rim (`game.coin`, locked into `shot.coin` when shot; drawn by `hoop.drawCoin()`
+  via `shownCoin()`, right after `hoop.drawBack`). Making that basket calls `grabCoin()`: +`coins.value`,
+  ×2 with a Blue Monster (`shot.coinBoost`). Winning an online challenge gives `coins.onlineWin`; the server
+  adds it to `wallets.bonus` in `finish` (so the challenger gets it on their next sync). The wallet counts
+  `earned`, `spent` and `bonus`, which only go up, so `syncScores()` can keep the MAX of each like records do
+  (balance = earned + bonus − spent). The home screen's coin button opens the **Shop** (`showShop()`), which
+  sells ball styles (`BALL_STYLES`): cosmetic, used in every mode (`ball.style`). A loaded Gold/Silver/Bronze
+  ball still shows its own colors.
 - **Scoring** (`onMake()` in main.js): (1 + swish bonus) × fire 2× × basket multiplier ×
   specialty ball × Green Monster multiplier, rounded. Each extra multiplier shows as a label under "+N".
 - **Lockers are per difficulty:** `Inventory` keeps `lockers.easy/normal/hard`, and
@@ -231,16 +243,18 @@ js/
 - **New power-up:** add it to `ITEMS` and `BALL_IDS`/`DRINK_IDS` in items.js. Put its effect in
   `Inventory.startShot()` (snapshot) and use it in main.js (`onMake()`, `boostOn()` or `hoopSpeed()`).
   Give it a CSS icon (`.icon-ball.<id>` or `.icon-can.<id> { --can: color }`) and add it to
-  `REWARD_WEIGHTS` in missions.js so missions can award it. The Blue Monster is a placeholder
-  (`comingSoon: true`) for a future coin booster.
+  `REWARD_WEIGHTS` in missions.js so missions can award it. `comingSoon: true` greys an item out.
+- **New ball style for the Shop:** add it to `BALL_STYLES` in wallet.js (name, price, colors, seam,
+  optional `glow`). The Shop card and in-game drawing pick it up automatically.
+- **Coin odds/values:** `CONFIG.coins` in config.js.
 - **New mission type:** add a template to `TEMPLATES` in missions.js. If it needs a new stat, count it
   on `game` in main.js (reset it in `startGame()`) and add it to `gameStats()`.
 - **New overlay/HUD item:** markup in index.html, styles in style.css, and a method in ui.js
   that main.js calls. Only touch the DOM when a value changes (see `UI.setText`).
 - **New visual effect:** add it to effects.js (screen space) and call it from main.js.
 - **Changing the icon:** edit and run `python3 tools/make_icons.py`, and update `icons/icon.svg`.
-- **Debugging in the browser console:** `window.ballin` exposes `{ game, ball, hoop, inventory, missions, online, CONFIG }`.
-  Examples: `ballin.inventory.add('gold', 5)`, `ballin.game.streak = 2` to test fire,
+- **Debugging in the browser console:** `window.ballin` exposes `{ game, ball, hoop, inventory, missions, online, wallet, CONFIG }`.
+  Examples: `ballin.inventory.add('gold', 5)`, `ballin.wallet.add(500)`, `ballin.game.coin = true`, `ballin.game.streak = 2` to test fire,
   `ballin.game.basketMultiplier = { value: 10, color: '#ff4df0' }`.
   To reset saved progress, run `localStorage.clear()` and reload.
 

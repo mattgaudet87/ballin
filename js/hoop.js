@@ -140,6 +140,59 @@ export class Hoop {
     ctx.restore();
   }
 
+  /**
+   * A gold coin spinning just above the rim: make this basket to grab it.
+   * `double` (Blue Monster) tints it blue and adds a "2×".
+   */
+  drawCoin(ctx, time, double) {
+    const p = projectHoop(this.x, this.rimY + 0.38, this.z);
+    if (!p) return;
+    const r = Math.max(11, 0.17 * p.scale);
+    const bob = Math.sin(time * 3) * r * 0.15;
+    const spin = Math.cos(time * 4); // -1..1: squash the width so it looks like it's spinning
+    const w = r * Math.max(0.12, Math.abs(spin));
+    const [light, mid, dark] = double ? ['#d6f0ff', '#3aa0ff', '#0d4f99'] : ['#fff6b8', '#ffc928', '#a86b00'];
+
+    ctx.save();
+    ctx.translate(p.x, p.y + bob);
+    ctx.shadowColor = mid;
+    ctx.shadowBlur = r * 1.2;
+    // The coin's edge (a slightly darker, thicker oval behind the face)
+    ctx.fillStyle = dark;
+    ctx.beginPath();
+    ctx.ellipse(r * 0.08 * Math.sign(spin || 1), 0, w + r * 0.06, r, 0, 0, TAU);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    // The face
+    const face = ctx.createLinearGradient(-w, -r, w, r);
+    face.addColorStop(0, light);
+    face.addColorStop(0.5, mid);
+    face.addColorStop(1, dark);
+    ctx.fillStyle = face;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, w, r, 0, 0, TAU);
+    ctx.fill();
+    // Inner ring, only when the coin faces us enough to see it
+    if (Math.abs(spin) > 0.35) {
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+      ctx.lineWidth = Math.max(1, r * 0.1);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, w * 0.68, r * 0.68, 0, 0, TAU);
+      ctx.stroke();
+    }
+    if (double) {
+      ctx.font = `900 ${Math.round(r * 1.1)}px -apple-system, "Helvetica Neue", Arial, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.lineWidth = Math.max(2, r * 0.25);
+      ctx.strokeStyle = '#0d4f99';
+      ctx.strokeText('2×', 0, -r * 1.7);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText('2×', 0, -r * 1.7);
+    }
+    ctx.restore();
+  }
+
   /** Called on a made basket: stretch the net. */
   onScore(strength = 1) {
     this.netVelocity += 5 * strength;

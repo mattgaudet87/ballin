@@ -115,6 +115,14 @@ export const CONFIG = {
     maxShotTime: 4.5, // give up on a shot after this many seconds
   },
 
+  // Coins (see wallet.js). Also used by api/challenges.js, so no DOM code in here!
+  coins: {
+    chance: 0.3, // chance that a coin floats in the hoop for the next ball (every mode)
+    value: 5, // coins you get for making the basket with a coin in it
+    blueMultiplier: 2, // Blue Monster: coins are worth this many times more
+    onlineWin: 50, // coins for winning an online challenge (given by the server)
+  },
+
   maxPixelRatio: 3, // cap for Retina rendering (higher = sharper but slower)
 
   storageKeys: {
@@ -127,6 +135,7 @@ export const CONFIG = {
     muted: 'ballin.muted',
     inventory: 'ballin.inventory',
     missions: 'ballin.missions',
+    wallet: 'ballin.wallet', // coins and ball styles (wallet.js)
     account: 'ballin.account', // online login: { username, token }
     recordsOwner: 'ballin.recordsOwner', // which account the saved records on this device belong to
   },

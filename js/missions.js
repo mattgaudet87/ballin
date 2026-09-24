@@ -45,7 +45,7 @@ const TEMPLATES = [
 ];
 
 /** Reward item chances (bigger number = more common). */
-const REWARD_WEIGHTS = { bronze: 30, white: 18, orange: 18, green: 14, silver: 14, gold: 6 };
+const REWARD_WEIGHTS = { bronze: 30, white: 18, orange: 18, green: 14, silver: 14, blue: 12, gold: 6 };
 
 function pickWeighted(weights) {
   const total = Object.values(weights).reduce((a, b) => a + b, 0);

@@ -71,9 +71,12 @@ export class Online {
 
   // --- Scores ----------------------------------------------------------------------
 
-  /** Save records to the account. Returns everything saved there (the higher of each). */
-  syncScores(bests, baskets) {
-    return this.request('POST', 'scores', { bests, baskets });
+  /**
+   * Save records and coins to the account. Returns everything saved there
+   * (the higher of each), plus wallet: { earned, spent, bonus, owned }.
+   */
+  syncScores(bests, baskets, wallet) {
+    return this.request('POST', 'scores', { bests, baskets, wallet });
   }
 
   // --- Challenges --------------------------------------------------------------------
@@ -87,8 +90,10 @@ export class Online {
     return (await this.request('POST', 'challenges', { action: 'create', friend, difficulty, score })).challenge;
   }
 
+  /** Returns the challenge, plus coinsWon if you won it. */
   async finishChallenge(id, score) {
-    return (await this.request('POST', 'challenges', { action: 'finish', id, score })).challenge;
+    const { challenge, coinsWon } = await this.request('POST', 'challenges', { action: 'finish', id, score });
+    return { ...challenge, coinsWon };
   }
 
   declineChallenge(id) {

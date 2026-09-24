@@ -194,6 +194,22 @@ export class SoundFX {
     this.tone({ freq: 1320, type: 'triangle', duration: 0.12, volume: 0.12, delay: 0.05 });
   }
 
+  /** Classic "ka-ching" when a basket grabs a coin. */
+  coin() {
+    if (!this.ready('coin')) return;
+    this.tone({ freq: 988, type: 'square', duration: 0.07, volume: 0.09 });
+    this.tone({ freq: 1319, type: 'square', duration: 0.3, volume: 0.09, delay: 0.07 });
+  }
+
+  /** Cash register sound when something is bought in the Shop. */
+  buy() {
+    if (!this.ready('buy')) return;
+    this.noise({ filter: 'highpass', freq: 3000, duration: 0.06, volume: 0.25 });
+    [1046, 1568, 2093].forEach((freq, i) => {
+      this.tone({ freq, type: 'triangle', duration: 0.2, volume: 0.12, delay: 0.05 + i * 0.07 });
+    });
+  }
+
   /** Shimmer when a rare multiplier (5× or 10×) appears on the hoop. */
   rareMultiplier() {
     if (!this.ready('rare')) return;

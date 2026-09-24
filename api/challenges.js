@@ -10,13 +10,18 @@
  *        { id, opponent, difficulty, myScore, theirScore, status }
  *        status: 'yourTurn' | 'waiting' | 'won' | 'lost' | 'tie' | 'declined'
  *   POST /api/challenges { action: 'create',  friend, difficulty, score } → { challenge }
- *   POST /api/challenges { action: 'finish',  id, score }                 → { challenge }
+ *   POST /api/challenges { action: 'finish',  id, score }                 → { challenge, coinsWon }
+ *
+ * When a challenge is finished, the winner gets CONFIG.coins.onlineWin coins,
+ * added to their wallet's `bonus` right here on the server (so the challenger
+ * gets them too, the next time their game syncs).
  *   POST /api/challenges { action: 'decline', id }                        → {}
  */
 import { query } from './_lib/db.js';
 import { endpoint, body, ApiError, findUser } from './_lib/auth.js';
 import { DIFFICULTIES } from '../js/modes.js';
 import { SELECT, fromMySide } from './_lib/challenge-view.js';
+import { CONFIG } from '../js/config.js';
 
 const LIST_LIMIT = 30; // how many recent challenges to send back
 const MAX_SCORE = 10_000; // no real 60-second game gets anywhere near this
@@ -52,7 +57,20 @@ export default endpoint(async (req, user) => {
       [cleanScore(data.score), now, Number(data.id), user.id],
     );
     if (!row) throw new ApiError(409, 'That challenge is already finished');
-    return { challenge: await loadChallenge(row.id, user.id) };
+    const challenge = await loadChallenge(row.id, user.id);
+
+    // Coins for the winner (nobody gets any for a tie)
+    let coinsWon = 0;
+    if (challenge.status !== 'tie') {
+      const winnerId = challenge.status === 'won' ? user.id : (await findUser(challenge.opponent)).id;
+      await query(
+        `INSERT INTO wallets (user_id, bonus) VALUES (?, ?)
+         ON CONFLICT (user_id) DO UPDATE SET bonus = bonus + excluded.bonus`,
+        [winnerId, CONFIG.coins.onlineWin],
+      );
+      if (winnerId === user.id) coinsWon = CONFIG.coins.onlineWin;
+    }
+    return { challenge, coinsWon };
   }
 
   if (data.action === 'decline') {

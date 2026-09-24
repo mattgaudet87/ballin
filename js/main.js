@@ -8,10 +8,12 @@
  *   4. applies the game RULES: scoring, streaks, on fire, the clock, power-ups,
  *      basket multipliers and missions
  *   5. runs the online screens (login, friends, challenges) using online.js
+ *   6. coins: a coin can float in the hoop before any shot; make it to grab
+ *      it. Coins buy ball styles in the Shop (wallet.js)
  *
  * The other modules each do one job and main.js wires them together.
  * Mode rules live in modes.js, power-ups in items.js, missions in missions.js,
- * and talking to the server in online.js.
+ * coins and the Shop in wallet.js, and talking to the server in online.js.
  */
 import { CONFIG, FX } from './config.js';
 import { fitCamera, project } from './camera.js';
@@ -28,8 +30,10 @@ import { MODES, DIFFICULTIES, rollBasketMultiplier } from './modes.js';
 import { Inventory, ITEMS, DRINK_EFFECTS } from './items.js';
 import { Missions } from './missions.js';
 import { Online } from './online.js';
+import { Wallet, BALL_STYLES } from './wallet.js';
 
 const G = CONFIG.game;
+const COINS = CONFIG.coins;
 const KEYS = CONFIG.storageKeys;
 const PHYSICS_STEP = 1 / CONFIG.physics.stepsPerSecond;
 
@@ -61,6 +65,7 @@ const ui = new UI();
 const inventory = new Inventory();
 const missions = new Missions();
 const online = new Online();
+const wallet = new Wallet();
 // What the Online screen last downloaded (null = not loaded yet)
 const onlineView = { friends: null, challenges: null };
 
@@ -87,6 +92,7 @@ const game = {
   fireCount: 0,
   bigMultiplierMakes: 0,
   itemsUsed: 0,
+  coinsEarned: 0, // coins grabbed this game
   startBest: 0, // the record when this game started (to spot a new best)
 
   timeLeft: 0,
@@ -94,6 +100,7 @@ const game = {
   ending: false, // Hot Hand: missed, game over is coming (no more shots)
   endTimer: 0, // seconds until that game over screen
   basketMultiplier: null, // Hot Hand bonus on the NEXT ball's basket, e.g. { value: 3, color }
+  coin: false, // is a coin floating in the hoop for the NEXT ball?
   spot: -1, // which of the ball's starting spots was used last (so it never repeats)
 };
 
@@ -147,6 +154,7 @@ function totalBaskets() {
 /** Refresh best scores and basket counts on the menus. */
 function showRecords() {
   ui.setRecords(currentBests(), currentLifetime(), totalBaskets());
+  ui.setCoins(wallet.balance);
 }
 
 /** Best scores for the current difficulty, e.g. { blitz: 12, hothand: 40 }. */
@@ -258,6 +266,8 @@ ui.onFriendPage({
   remove: () => removeFriend(friendPage.username),
 });
 ui.onCollect(collectReward);
+ui.onShop(showShop);
+ui.onShopItem(shopItem);
 ui.onItem(useItem);
 ui.onMute(() => ui.setMuted(audio.toggleMute()));
 ui.onLeave(leaveGame);
@@ -270,6 +280,7 @@ function shoot(swipe) {
   // Lock in the power-ups (Hot Hand only) and basket multiplier for this ball
   const shot = game.mode.powerUps ? inventory.startShot() : { ballMultiplier: 1, greenMultiplier: 1, itemsUsed: 0 };
   shot.basket = game.basketMultiplier;
+  shot.coin = game.coin;
   game.itemsUsed += shot.itemsUsed;
   ball.shot = shot;
 
@@ -320,6 +331,34 @@ function showHotHandHub() {
   showRecords();
   ui.renderHotHandHub(missionViews(), inventory);
   ui.showScreen('hothand');
+}
+
+// --- Shop --------------------------------------------------------------------
+
+function showShop() {
+  game.state = 'menu';
+  newBall();
+  ui.renderShop(wallet);
+  ui.showScreen('shop');
+  syncScores(); // pick up coins from online wins (redraws the shop if it's open)
+}
+
+/** A ball in the Shop was tapped: use it if you own it, otherwise buy it. */
+function shopItem(id) {
+  const style = BALL_STYLES[id];
+  if (wallet.owns(id)) {
+    wallet.equip(id);
+    audio.select();
+  } else if (wallet.balance < style.price) {
+    return ui.renderShop(wallet, `You need ${style.price - wallet.balance} more coins for ${style.name}.`);
+  } else if (confirm(`Buy the ${style.name} ball for ${style.price} coins?`)) {
+    wallet.buy(id);
+    audio.buy();
+    syncScores(); // save the purchase to your account
+  }
+  ball.style = wallet.equipped;
+  ui.renderShop(wallet);
+  showRecords();
 }
 
 /**
@@ -477,7 +516,7 @@ async function syncScores() {
 
   let saved;
   try {
-    saved = switching ? await online.syncScores({}, {}) : await online.syncScores(game.best, game.lifetime);
+    saved = switching ? await online.syncScores({}, {}, {}) : await online.syncScores(game.best, game.lifetime, wallet.toJSON());
   } catch {
     return; // no internet right now; it tries again after the next game
   }
@@ -495,8 +534,10 @@ async function syncScores() {
       }
     }
   }
+  if (saved.wallet) wallet.merge(saved.wallet, switching);
   saveJSON(KEYS.recordsOwner, username);
   if (!inGame()) showRecords();
+  if (ui.isShowing('shop')) ui.renderShop(wallet);
 }
 
 async function addFriend(username, clearInput) {
@@ -557,6 +598,11 @@ async function sendChallengeResult() {
       ? await online.finishChallenge(challenge.id, challenge.score)
       : await online.sendChallenge(challenge.opponent, game.difficulty.id, challenge.score);
     game.challenge = null; // delivered
+    // The server adds the prize to your account; show it here right away too
+    if (result.coinsWon) {
+      wallet.addBonus(result.coinsWon);
+      ui.setGameOverCoins(game.coinsEarned + result.coinsWon);
+    }
     ui.setGameOverNote(challengeNote(result));
     if (result.status === 'won') setTimeout(() => audio.newBest(), 300);
   } catch (err) {
@@ -567,7 +613,7 @@ async function sendChallengeResult() {
 }
 
 function challengeNote({ status, opponent, myScore, theirScore }) {
-  if (status === 'won') return `🏆 You beat ${opponent}, ${myScore}–${theirScore}!`;
+  if (status === 'won') return `🏆 You beat ${opponent}, ${myScore}–${theirScore}! +${COINS.onlineWin} coins`;
   if (status === 'lost') return `${opponent} wins this one, ${theirScore}–${myScore}.`;
   if (status === 'tie') return `Tie with ${opponent}, ${myScore}–${theirScore}!`;
   return `Sent to ${opponent}! You’ll see who won once they play.`;
@@ -595,6 +641,7 @@ function startGame(modeId, { tapToStart = true } = {}) {
     fireCount: 0,
     bigMultiplierMakes: 0,
     itemsUsed: 0,
+    coinsEarned: 0,
     startBest: game.best[modeId][game.difficulty.id],
     timeLeft: mode.duration,
     reloadTimer: 0,
@@ -699,6 +746,7 @@ function endGame() {
     lifetime: game.lifetime[mode.id][diff],
     isNewBest,
     missions: missionInfo,
+    coins: game.coinsEarned,
   });
   newBall();
 
@@ -754,6 +802,10 @@ function newBall() {
   const randomSpot = inGame() && !game.mode.fixedSpot;
   ball.reset(randomSpot ? randomStartX() : CONFIG.ball.startX);
   ball.skin = inGame() && game.mode.powerUps ? inventory.selectedBall : null;
+  ball.style = wallet.equipped;
+
+  // Every mode: maybe a coin floats in the hoop for this ball
+  game.coin = inGame() && Math.random() < COINS.chance;
 
   // Hot Hand: maybe put a multiplier on the next basket
   game.basketMultiplier = inGame() && game.mode.basketMultipliers ? rollBasketMultiplier() : null;
@@ -956,6 +1008,7 @@ function onMake(b, swish) {
     audio.swish();
     effects.floatText(rim.x, rim.y - 85, 'SWISH!', { color: '#7ee8ff', size: 30 });
   }
+  if (shot.coin) grabCoin(shot, rim);
   if (onFireNow && game.streak === G.fireStreak) {
     audio.fire();
     effects.shake(8);
@@ -964,6 +1017,17 @@ function onMake(b, swish) {
   if (rule && hoopStatBefore < rule.startAt && game[rule.stat] >= rule.startAt) {
     effects.floatText(view.width / 2, view.height * 0.58, 'HOOP ON THE MOVE!', { color: '#7aa2ff', size: 26, life: 1.6 });
   }
+}
+
+/** A made basket had a coin in it: add it to the wallet (2× with a Blue Monster). */
+function grabCoin(shot, rim) {
+  const amount = COINS.value * (shot.coinBoost ? COINS.blueMultiplier : 1);
+  wallet.add(amount);
+  game.coinsEarned += amount;
+  audio.coin();
+  const color = shot.coinBoost ? '#7ec8ff' : '#ffd23f';
+  effects.floatText(rim.x + 70, rim.y - 60, `+${amount} COINS`, { color, size: 26, life: 1.3 });
+  effects.sparks(rim.x, rim.y - 30, shot.coinBoost ? ['#ffffff', '#3aa0ff'] : ['#fff6b8', '#ffc928'], 18);
 }
 
 /** Ball `b` missed. */
@@ -1034,6 +1098,7 @@ function hudInfo() {
     streak: game.streak,
     onFire: isOnFire(),
     leaveLabel: mode.endless ? 'END' : '✕ LEAVE',
+    coins: wallet.balance,
   };
   if (mode.passAndPlay) {
     info.label = currentPlayer().name.toUpperCase();
@@ -1068,6 +1133,19 @@ function shownMultiplier() {
   return game.basketMultiplier;
 }
 
+/**
+ * The coin to show in the hoop: the newest ball in the air that's going for
+ * one, else the next ball's. `double` = worth 2× (Blue Monster).
+ */
+function shownCoin() {
+  for (let i = flying.length - 1; i >= 0; i--) {
+    const b = flying[i];
+    if (b.outcome === null && b.shot.coin) return { double: Boolean(b.shot.coinBoost) };
+  }
+  if (!game.coin || game.ending || ball.state !== 'ready') return null;
+  return { double: game.mode.powerUps && inventory.isActive('blue') };
+}
+
 function render(time) {
   const { width, height, dpr } = view;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -1098,6 +1176,9 @@ function render(time) {
   const drawBalls = (list) => list.forEach((b) => b.draw(ctx, time, onFire));
   drawBalls(layers.behindBoard);
   hoop.drawBack(ctx);
+  // A coin floats above the rim (in front of the board) when a shot can grab one
+  const coin = inGame() && shownCoin();
+  if (coin) hoop.drawCoin(ctx, time, coin.double);
   drawBalls(layers.insideHoop);
   hoop.drawFront(ctx);
   effects.drawFlames(ctx);
@@ -1129,8 +1210,8 @@ requestAnimationFrame(frame);
 refreshOnline();
 syncScores();
 
-// Handy for debugging in the browser console, e.g. ballin.inventory.add('gold', 5)
+// Handy for debugging in the browser console, e.g. ballin.inventory.add('gold', 5) or ballin.wallet.add(500)
 window.ballin = {
-  game, hoop, inventory, missions, online, CONFIG, flying,
+  game, hoop, inventory, missions, online, wallet, CONFIG, flying,
   get ball() { return ball; }, // the ball waiting at the bottom (a new one after every shot)
 };
