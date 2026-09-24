@@ -9,7 +9,7 @@
  *   - drawing, split into a BACK layer and a FRONT layer so the ball can
  *     appear to drop *inside* the rim (see render() in main.js)
  */
-import { CONFIG } from './config.js';
+import { CONFIG, FX, FX_FONT } from './config.js';
 import { project, projectHoop } from './camera.js';
 
 const TAU = Math.PI * 2;
@@ -122,7 +122,9 @@ export class Hoop {
     ctx.save();
     ctx.translate(p.x, p.y);
     ctx.scale(pulse, pulse);
-    ctx.font = `900 ${Math.round(size)}px -apple-system, "SF Pro Display", "Helvetica Neue", Arial, sans-serif`;
+    ctx.font = FX
+      ? `italic 900 ${Math.round(size * 1.2)}px ${FX_FONT}`
+      : `900 ${Math.round(size)}px -apple-system, "SF Pro Display", "Helvetica Neue", Arial, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     const w = ctx.measureText(text).width + size * 0.9;
@@ -229,6 +231,25 @@ export class Hoop {
     const sqEnd = projectHoop(this.x + 0.3, this.rimY + 0.02, this.boardZ);
     ctx.lineWidth = Math.max(2, 0.035 * s);
     ctx.strokeRect(sq.x, sq.y, sqEnd.x - sq.x, sqEnd.y - sq.y);
+
+    if (FX) {
+      // Glass sheen: a soft diagonal streak across the board
+      ctx.save();
+      roundRect(ctx, tl.x, tl.y, w, h, corner);
+      ctx.clip();
+      const sheen = ctx.createLinearGradient(tl.x, tl.y, tl.x + w, br.y);
+      sheen.addColorStop(0.25, 'rgba(180, 200, 230, 0)');
+      sheen.addColorStop(0.38, 'rgba(180, 200, 230, 0.22)');
+      sheen.addColorStop(0.5, 'rgba(180, 200, 230, 0)');
+      ctx.fillStyle = sheen;
+      ctx.fillRect(tl.x, tl.y, w, h);
+      ctx.restore();
+      // Padding along the bottom edge of the board
+      const padH = Math.max(3, 0.04 * s);
+      ctx.fillStyle = '#1d2340';
+      roundRect(ctx, tl.x, br.y - padH * 0.5, w, padH, padH / 2);
+      ctx.fill();
+    }
   }
 
   /** The little metal arm joining the rim to the backboard. */
@@ -250,13 +271,16 @@ export class Hoop {
     const center = projectHoop(this.x, this.rimY, this.z);
     const width = Math.max(2.5, this.tube * 2 * center.scale);
 
-    ctx.beginPath();
-    for (let i = 0; i <= RIM_SEGMENTS / 2; i++) {
-      const a = start + (i / (RIM_SEGMENTS / 2)) * Math.PI;
-      const p = projectHoop(this.x + Math.cos(a) * this.radius, this.rimY, this.z + Math.sin(a) * this.radius);
-      if (i === 0) ctx.moveTo(p.x, p.y);
-      else ctx.lineTo(p.x, p.y);
-    }
+    const trace = (dy = 0) => {
+      ctx.beginPath();
+      for (let i = 0; i <= RIM_SEGMENTS / 2; i++) {
+        const a = start + (i / (RIM_SEGMENTS / 2)) * Math.PI;
+        const p = projectHoop(this.x + Math.cos(a) * this.radius, this.rimY, this.z + Math.sin(a) * this.radius);
+        if (i === 0) ctx.moveTo(p.x, p.y + dy);
+        else ctx.lineTo(p.x, p.y + dy);
+      }
+    };
+    trace();
     ctx.lineCap = 'round';
     // Dark outline first, then the bright rim on top
     ctx.strokeStyle = COLORS.rimDark;
@@ -265,6 +289,14 @@ export class Hoop {
     ctx.strokeStyle = COLORS.rim;
     ctx.lineWidth = width;
     ctx.stroke();
+
+    if (FX) {
+      // Specular highlight along the top of the metal tube
+      trace(-width * 0.28);
+      ctx.strokeStyle = 'rgba(255, 196, 150, 0.9)';
+      ctx.lineWidth = width * 0.32;
+      ctx.stroke();
+    }
   }
 
   /** 3D position of a knot in the net. row 0 = at the rim, row NET_ROWS = bottom. */
@@ -285,8 +317,9 @@ export class Hoop {
   drawNet(ctx, half) {
     const wantBack = half === 'back';
     const center = projectHoop(this.x, this.rimY, this.z);
-    ctx.strokeStyle = COLORS.net;
-    ctx.lineWidth = Math.max(1, 0.011 * center.scale);
+    // FX: far strands are dimmer so the net reads as 3D
+    ctx.strokeStyle = FX && wantBack ? 'rgba(255, 255, 255, 0.5)' : COLORS.net;
+    ctx.lineWidth = Math.max(1, (FX ? 0.013 : 0.011) * center.scale);
     ctx.lineCap = 'round';
     ctx.beginPath();
 

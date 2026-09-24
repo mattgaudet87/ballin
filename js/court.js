@@ -17,7 +17,7 @@
  * Everything is placed in 3D world meters (see camera.js), so the floor lines
  * shrink toward the wall with real perspective.
  */
-import { CONFIG } from './config.js';
+import { CONFIG, FX } from './config.js';
 import { camera, project } from './camera.js';
 
 export const COURT_THEMES = {
@@ -69,6 +69,7 @@ export function drawCourt(ctx, width, height, hoop, difficultyId = 'normal') {
   const floorLine = project(0, 0, hoop.wallZ).y;
 
   drawWall(ctx, width, floorLine, hoop, theme, random);
+  if (FX) depthOfField(ctx, width, floorLine);
   drawFloor(ctx, width, height, floorLine, hoop, theme, random);
   drawLines(ctx, hoop, theme);
   drawLighting(ctx, width, height, floorLine, hoop, theme);
@@ -292,10 +293,103 @@ function drawLighting(ctx, width, height, floorLine, hoop, theme) {
   ctx.fillStyle = shine;
   ctx.fillRect(0, floorLine, width, height - floorLine);
 
+  if (FX) drawLightCones(ctx, width, height, floorLine, theme);
+
   // Vignette (darker edges pull the eye to the center)
   const vignette = ctx.createRadialGradient(width / 2, height * 0.5, height * 0.3, width / 2, height * 0.5, height * 0.85);
   vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
   vignette.addColorStop(1, 'rgba(0, 0, 0, 0.5)');
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, width, height);
+  if (FX) colorGrade(ctx, width, height);
+}
+
+// ---------------------------------------------------------------------------
+// FX: depth of field + arena light cones
+// ---------------------------------------------------------------------------
+
+/** Soften and dim the back wall so the hoop and ball read sharper in front of it. */
+function depthOfField(ctx, width, floorLine) {
+  const dpr = ctx.getTransform().a;
+  const c = ctx.canvas;
+  const srcH = Math.ceil(floorLine * dpr);
+  ctx.save();
+  ctx.filter = 'blur(2.2px) brightness(0.72) saturate(1.1)';
+  ctx.drawImage(c, 0, 0, c.width, srcH, 0, 0, width, srcH / dpr);
+  ctx.restore();
+}
+
+/** Four hard beams from ceiling lamps, haze at the floor line, and bright pools on the hardwood. */
+function drawLightCones(ctx, width, height, floorLine, theme) {
+  const bottom = floorLine + (height - floorLine) * 0.5;
+  const poolY = floorLine + (height - floorLine) * 0.26;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const beams = [[0.12, 0.10], [0.38, 0.03], [0.62, -0.03], [0.88, -0.10]];
+  for (const [f, lean] of beams) {
+    const x = width * f;
+    const foot = x + lean * width;
+    // Beam: bright core inside a wider soft glow
+    for (const [spread, alpha] of [[0.2, 0.55], [0.1, 0.8]]) {
+      const beam = ctx.createLinearGradient(0, 0, 0, bottom);
+      beam.addColorStop(0, theme.light);
+      beam.addColorStop(0.6, theme.light.replace(/[\d.]+\)$/, '0.12)'));
+      beam.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = beam;
+      ctx.beginPath();
+      ctx.moveTo(x - width * 0.02, 0);
+      ctx.lineTo(x + width * 0.02, 0);
+      ctx.lineTo(foot + width * spread, bottom);
+      ctx.lineTo(foot - width * spread, bottom);
+      ctx.closePath();
+      ctx.fill();
+    }
+    // Lamp flare at the top
+    const lamp = ctx.createRadialGradient(x, 0, 0, x, 0, width * 0.12);
+    lamp.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+    lamp.addColorStop(0.25, theme.light);
+    lamp.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = lamp;
+    ctx.fillRect(x - width * 0.12, 0, width * 0.24, width * 0.12);
+    // Pool of light on the floor
+    const r = width * 0.24;
+    const pool = ctx.createRadialGradient(foot, poolY, 0, foot, poolY, r);
+    pool.addColorStop(0, 'rgba(255, 250, 240, 0.34)');
+    pool.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = pool;
+    ctx.save();
+    ctx.translate(foot, poolY);
+    ctx.scale(1, 0.26);
+    ctx.fillRect(-r, -r, r * 2, r * 2);
+    ctx.restore();
+  }
+  // Haze hanging where the floor meets the wall
+  const hazeH = height * 0.14;
+  const haze = ctx.createLinearGradient(0, floorLine - hazeH, 0, floorLine + hazeH);
+  haze.addColorStop(0, 'rgba(0, 0, 0, 0)');
+  haze.addColorStop(0.5, theme.light.replace(/[\d.]+\)$/, '0.22)'));
+  haze.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = haze;
+  ctx.fillRect(0, floorLine - hazeH, width, hazeH * 2);
+  ctx.restore();
+}
+
+/** Cinematic grade: cool shadows up top, warm floor, heavy vignette. */
+function colorGrade(ctx, width, height) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'soft-light';
+  const grade = ctx.createLinearGradient(0, 0, 0, height);
+  grade.addColorStop(0, 'rgba(30, 70, 140, 0.55)');
+  grade.addColorStop(0.5, 'rgba(0, 0, 0, 0)');
+  grade.addColorStop(1, 'rgba(255, 130, 50, 0.4)');
+  ctx.fillStyle = grade;
+  ctx.fillRect(0, 0, width, height);
+  ctx.restore();
+  const vignette = ctx.createRadialGradient(width / 2, height * 0.45, height * 0.18, width / 2, height * 0.45, height * 0.75);
+  vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
+  vignette.addColorStop(1, 'rgba(0, 0, 0, 0.55)');
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, width, height);
 }

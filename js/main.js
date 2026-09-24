@@ -13,7 +13,7 @@
  * Mode rules live in modes.js, power-ups in items.js, missions in missions.js,
  * and talking to the server in online.js.
  */
-import { CONFIG } from './config.js';
+import { CONFIG, FX } from './config.js';
 import { fitCamera, project } from './camera.js';
 import { Ball } from './ball.js';
 import { Hoop } from './hoop.js';
@@ -940,7 +940,13 @@ function onMake(b, swish) {
     effects.floatText(rim.x, rim.y + 30 + i * 24, label.text, { color: label.color, size: 18, life: 1.3 });
   });
   const colors = shot.basket ? [shot.basket.color, '#ffffff', '#ffd23f'] : onFireNow ? ['#ffd23f', '#ff7a1a', '#ff3d1a'] : ['#ffffff', '#ff7a1a', '#7aa2ff'];
-  effects.burst(rim.x, rim.y + 20, colors, big ? 36 : 18);
+  effects.burst(rim.x, rim.y + 20, colors, FX ? (big ? 60 : 34) : big ? 36 : 18, FX ? 340 : 260);
+  if (FX) {
+    effects.ring(rim.x, rim.y, hoop.radius * rim.scale, swish ? '#7ee8ff' : colors[0]);
+    effects.sparks(rim.x, rim.y, swish ? ['#ffffff', '#7ee8ff'] : ['#fff1a8', '#ffd23f', '#ff9a1f'], big ? 48 : 26);
+    effects.flash(rim.x, rim.y, big || onFireNow ? 0.35 : swish ? 0.22 : 0.14, swish ? '150, 230, 255' : '255, 190, 120');
+    effects.shake(big ? 10 : swish ? 5 : 3);
+  }
   if (big) effects.shake(6);
   hoop.onScore(swish ? 1.3 : 1);
   audio.score(game.streak);
@@ -1073,6 +1079,7 @@ function render(time) {
   ctx.translate(shakeX, shakeY);
 
   ctx.drawImage(courtCanvas, 0, 0, width, height);
+  if (FX) effects.drawMotes(ctx, width, height, time, isOnFire());
   for (const b of flying) b.drawShadow(ctx);
   ball.drawShadow(ctx);
 
@@ -1100,6 +1107,7 @@ function render(time) {
   ctx.restore();
 
   if (onFire) effects.drawFireGlow(ctx, width, height, time);
+  if (FX) effects.drawPost(ctx, width, height);
 }
 
 let lastTime = performance.now();

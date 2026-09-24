@@ -21,6 +21,11 @@
   <link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
 
+  <!-- Display face for the logo, mode names and numbers -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@1,700;1,800;1,900&display=swap" />
+
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -77,44 +82,43 @@
           <div class="hero-ball" aria-hidden="true"></div>
           <h1 class="title">BALLIN'</h1>
           <p class="tagline">Flick to shoot. Aim is everything.</p>
-          <div class="lifetime-total"><span aria-hidden="true">🏀</span> <b id="lifetime-total">0</b> lifetime baskets</div>
+          <div class="lifetime-total"><span class="mini-ball" aria-hidden="true"></span><b id="lifetime-total">0</b> lifetime baskets</div>
         </header>
 
-        <div class="difficulty-picker" role="radiogroup" aria-label="Difficulty">
-          <button type="button" data-difficulty="easy">Easy</button>
-          <button type="button" data-difficulty="normal">Normal</button>
-          <button type="button" data-difficulty="hard">Hard</button>
+        <!-- Each difficulty is a venue: the dot is that court's lane paint (court.js COURT_THEMES) -->
+        <div class="difficulty-picker venues" role="radiogroup" aria-label="Difficulty">
+          <button type="button" data-difficulty="easy">Easy<span class="venue"><i class="venue-dot easy"></i>Rec Center</span></button>
+          <button type="button" data-difficulty="normal">Normal<span class="venue"><i class="venue-dot normal"></i>Brick Gym</span></button>
+          <button type="button" data-difficulty="hard">Hard<span class="venue"><i class="venue-dot hard"></i>Night Court</span></button>
         </div>
 
         <div class="modes">
+          <!-- Blitz is the full-width hero; Hot Hand + Free Throw pair up; Friends is a wide strip -->
           <button class="mode-card blitz" data-mode="blitz" type="button">
-            <span class="mode-art" aria-hidden="true">⏱</span>
-            <span class="mode-icon" aria-hidden="true">⏱</span>
+            <span class="mode-mark" aria-hidden="true">60</span>
+            <span class="mode-eyebrow">MAIN EVENT</span>
             <span class="mode-name">Blitz</span>
             <span class="mode-desc">60 seconds. Score all you can.</span>
-            <span class="mode-stats"><span>Best <b data-best="blitz">0</b></span><span>🏀 <b data-lifetime="blitz">0</b></span></span>
+            <span class="mode-stats"><span>Best <b data-best="blitz">0</b></span><span><b data-lifetime="blitz">0</b> baskets</span></span>
           </button>
           <button class="mode-card hot" data-mode="hothand" type="button">
-            <span class="mode-art" aria-hidden="true">🔥</span>
-            <span class="mode-icon" aria-hidden="true">🔥</span>
+            <span class="mode-mark" aria-hidden="true">×10</span>
             <span class="mode-name">Hot Hand</span>
             <span class="mode-desc">One miss ends it. Multipliers &amp; power-ups.</span>
-            <span class="mode-stats"><span>Best <b data-best="hothand">0</b></span><span>🏀 <b data-lifetime="hothand">0</b></span></span>
+            <span class="mode-stats"><span>Best <b data-best="hothand">0</b></span></span>
           </button>
           <button class="mode-card freethrow" data-mode="freethrow" type="button">
-            <span class="mode-art" aria-hidden="true">🎯</span>
-            <span class="mode-icon" aria-hidden="true">🎯</span>
+            <span class="mode-mark" aria-hidden="true">FT</span>
             <span class="mode-name">Free Throw</span>
             <span class="mode-desc">No clock, no losing. How many in a row?</span>
-            <span class="mode-stats"><span>Record <b data-best="freethrow">0</b></span><span>🏀 <b data-lifetime="freethrow">0</b></span></span>
+            <span class="mode-stats"><span>Record <b data-best="freethrow">0</b></span></span>
           </button>
           <button class="mode-card friends" data-mode="friends" type="button">
-            <span class="mode-art" aria-hidden="true">👥</span>
-            <span class="mode-icon" aria-hidden="true">👥</span>
+            <span class="mode-text">
+              <span class="mode-name">Blitz with Friends</span>
+              <span class="mode-desc">Pass and play, or play friends online.</span>
+            </span>
             <span id="friends-badge" class="mode-badge hidden">0</span>
-            <span class="mode-name">Blitz with Friends</span>
-            <span class="mode-desc">Pass and play, or play friends online.</span>
-            <span class="mode-stats"><span>🏀 <b data-lifetime="friends">0</b></span></span>
           </button>
         </div>
 

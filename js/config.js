@@ -12,6 +12,12 @@
  * The ball rests at z = 0 and the hoop sits further away at z = hoop.z.
  * camera.js turns these 3D positions into 2D screen positions.
  */
+// Cinematic visual pack: on by default, open the game with ?nofx to compare. Drawing only, no gameplay changes.
+export const FX = typeof location === 'undefined' || !new URLSearchParams(location.search).has('nofx');
+
+// Display face used by canvas text when FX is on (loaded in index.html)
+export const FX_FONT = '"Barlow Condensed", -apple-system, "SF Pro Display", "Helvetica Neue", Arial, sans-serif';
+
 export const CONFIG = {
   gravity: 9.8, // meters per second², same as Earth
 

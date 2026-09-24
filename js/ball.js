@@ -9,7 +9,7 @@
  *   'flying'    — in the air after a shot (several balls can fly at once)
  *   'reloading' — hidden for a split second before the next ball pops in
  */
-import { CONFIG } from './config.js';
+import { CONFIG, FX } from './config.js';
 import { project, projectHoop } from './camera.js';
 
 const TAU = Math.PI * 2;
@@ -92,6 +92,7 @@ export class Ball {
     this.spawn = 0; // 0 → 1 "pop in" animation progress
     this.flightTime = 0;
     this.skin = null; // 'gold' | 'silver' | 'bronze' | null (set by main.js)
+    this.trail = []; // FX: recent screen positions for the motion trail
 
     // Per-shot flags used for scoring
     this.touchedRim = false;
@@ -155,6 +156,13 @@ export class Ball {
     ctx.beginPath();
     ctx.ellipse(p.x, p.y, w, w * 0.3, 0, 0, TAU);
     ctx.fill();
+    if (FX) {
+      // Tight contact shadow that only shows when the ball is near the floor
+      ctx.globalAlpha = 0.5 * heightFade ** 4;
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y, w * 0.55, w * 0.14, 0, 0, TAU);
+      ctx.fill();
+    }
     ctx.restore();
   }
 
@@ -162,6 +170,8 @@ export class Ball {
     const s = this.screenPosition(time);
     if (!s || s.r < 0.5) return;
     const r = s.r;
+
+    if (FX) this.drawTrail(ctx, s, onFire);
 
     ctx.save();
     ctx.translate(s.x, s.y);
@@ -204,6 +214,29 @@ export class Ball {
     ctx.arc(0, 0, r, 0, TAU);
     ctx.fill();
 
+    ctx.restore();
+  }
+
+  /** FX: fading ghost balls behind a flying shot. */
+  drawTrail(ctx, s, onFire) {
+    if (this.state !== 'flying') {
+      this.trail.length = 0;
+      return;
+    }
+    this.trail.push({ x: s.x, y: s.y, r: s.r });
+    if (this.trail.length > 7) this.trail.shift();
+    const color = SKINS[this.skin ?? (onFire ? 'fire' : 'normal')][1];
+    ctx.save();
+    ctx.fillStyle = color;
+    const n = this.trail.length;
+    for (let i = 0; i < n - 1; i++) {
+      const t = this.trail[i];
+      const k = (i + 1) / n;
+      ctx.globalAlpha = 0.22 * k;
+      ctx.beginPath();
+      ctx.arc(t.x, t.y, t.r * (0.55 + 0.4 * k), 0, TAU);
+      ctx.fill();
+    }
     ctx.restore();
   }
 
