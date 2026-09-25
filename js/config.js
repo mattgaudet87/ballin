@@ -134,6 +134,7 @@ export const CONFIG = {
     best: 'ballin.best.', // + mode + '.' + difficulty, e.g. 'ballin.best.blitz.hard'
     baskets: 'ballin.baskets.', // + mode + '.' + difficulty: lifetime baskets made
     difficulty: 'ballin.difficulty',
+    blitzDuration: 'ballin.blitzDuration', // 30 or 60: which Blitz length was last picked
     court: 'ballin.court', // stadium from the Customize screen (unset = each difficulty's classic)
     floor: 'ballin.floor', // floor from the Customize screen (unset = the stadium's own)
     playerNames: 'ballin.playerNames',

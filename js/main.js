@@ -85,6 +85,7 @@ const game = {
   // Floor picked on the Customize screen. 'stadium' = the stadium's own (see floorId())
   floor: FLOORS[loadJSON(KEYS.floor, null)] ? loadJSON(KEYS.floor, null) : 'stadium',
   customizeTab: 'stadium', // the Customize screen's open tab: 'stadium' | 'floor' | 'ball'
+  blitzDuration: loadNumber(KEYS.blitzDuration, 60), // 30 or 60: Blitz's duration toggle
   best: loadBests(), // best[modeId][difficultyId]
   lifetime: loadLifetime(), // lifetime[modeId][difficultyId] = baskets made ever
   match: null, // Blitz with Friends: { players: [{ name, rounds, total }], turn }
@@ -403,6 +404,10 @@ ui.onModeSelect((modeId) => {
   else showModeScreen(modeId);
 });
 ui.onDifficulty(applyDifficulty);
+ui.onDuration(pickBlitzDuration);
+ui.onLeaderboard(showLeaderboard);
+ui.onLeaderboardTab(pickLeaderboardTab);
+ui.onLeaderboardDifficulty(pickLeaderboardDifficulty);
 ui.onHome(showHome);
 ui.onHotHandPlay(() => startGame('hothand'));
 ui.onModePlay(() => startGame(game.pendingMode));
@@ -503,23 +508,39 @@ function showHotHandHub() {
 /**
  * Blitz / Free Throw: pick a difficulty and see this mode's stats before
  * playing. `game.pendingMode` remembers which mode the PLAY button starts.
+ * Blitz also has a 30s/60s duration toggle, each with its own best score
+ * (see `blitz30` in modes.js) — resolveBlitzModeId() picks the right one.
  */
 function showModeScreen(modeId) {
   game.state = 'menu';
-  game.pendingMode = modeId;
+  game.pendingMode = modeId === 'blitz' ? resolveBlitzModeId() : modeId;
   newBall();
   showRecords();
   showModeScreenStats();
   ui.showScreen('mode');
 }
 
-/** Refresh the mode screen's stats for the current difficulty. */
+/** Which Blitz mode id matches the currently picked duration. */
+function resolveBlitzModeId() {
+  return game.blitzDuration === 30 ? 'blitz30' : 'blitz';
+}
+
+/** The duration toggle (mode screen) was tapped: switch mode and duration together. */
+function pickBlitzDuration(duration) {
+  game.blitzDuration = duration;
+  saveNumber(KEYS.blitzDuration, duration);
+  game.pendingMode = resolveBlitzModeId();
+  showModeScreenStats();
+}
+
+/** Refresh the mode screen's stats for the current difficulty (and Blitz's duration). */
 function showModeScreenStats() {
   const mode = MODES[game.pendingMode];
+  const isBlitz = mode.id === 'blitz' || mode.id === 'blitz30';
   ui.showModeScreen(mode, {
     best: game.best[mode.id][game.difficulty.id],
     lifetime: game.lifetime[mode.id][game.difficulty.id],
-  });
+  }, isBlitz ? game.blitzDuration : null);
 }
 
 /**
@@ -637,6 +658,44 @@ async function refreshOnline() {
     ui.showOnlineError(err.message);
   }
   renderOnline();
+}
+
+// --- Leaderboard -------------------------------------------------------------------
+
+// Which tab/difficulty is showing, and its rows (null while loading, or an error message)
+const leaderboardView = { category: 'baskets', difficulty: 'normal', rows: null, error: null };
+
+function showLeaderboard() {
+  game.state = 'menu';
+  newBall();
+  leaderboardView.difficulty = game.difficulty.id;
+  ui.showScreen('leaderboard');
+  loadLeaderboard();
+}
+
+function pickLeaderboardTab(category) {
+  leaderboardView.category = category;
+  loadLeaderboard();
+}
+
+function pickLeaderboardDifficulty(difficulty) {
+  leaderboardView.difficulty = difficulty;
+  loadLeaderboard();
+}
+
+/** Download the picked tab's top players and redraw (a fresh loading state while it's in flight). */
+async function loadLeaderboard() {
+  const { category, difficulty } = leaderboardView;
+  Object.assign(leaderboardView, { rows: null, error: null });
+  ui.renderLeaderboard(leaderboardView, online.username);
+  try {
+    const rows = await online.leaderboard(category, difficulty);
+    // Another tab may have been tapped while this was in flight — ignore a stale reply
+    if (leaderboardView.category === category && leaderboardView.difficulty === difficulty) leaderboardView.rows = rows;
+  } catch (err) {
+    if (leaderboardView.category === category && leaderboardView.difficulty === difficulty) leaderboardView.error = err.message;
+  }
+  ui.renderLeaderboard(leaderboardView, online.username);
 }
 
 /** The login form was sent. action is 'login' or 'signup'. */

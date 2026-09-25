@@ -79,6 +79,13 @@ export class Online {
     return this.request('POST', 'scores', { bests, baskets, wallet });
   }
 
+  // --- Leaderboard -----------------------------------------------------------------
+
+  /** Top players for one leaderboard tab: [{ username, value }], best first. */
+  async leaderboard(category, difficulty) {
+    return (await this.request('GET', `leaderboard?category=${category}&difficulty=${difficulty}`)).rows;
+  }
+
   // --- Challenges --------------------------------------------------------------------
 
   /** Newest first: [{ id, opponent, difficulty, myScore, theirScore, status }] */

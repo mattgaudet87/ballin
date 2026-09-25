@@ -26,6 +26,7 @@ const $$ = (selector) => document.querySelectorAll(selector);
 const SCREENS = {
   home: 'home-screen',
   mode: 'mode-screen',
+  leaderboard: 'leaderboard-screen',
   customize: 'customize-screen',
   hothand: 'hothand-screen',
   friends: 'friends-screen',
@@ -113,6 +114,7 @@ export class UI {
       pauseTimeStat: $('pause-time-stat'),
       pauseTime: $('pause-time'),
       pauseNote: $('pause-note'),
+      modeDurationPicker: $('mode-duration-picker'),
       modeScreenTitle: $('mode-screen-title'),
       modeScreenDesc: $('mode-screen-desc'),
       modeScreenBest: $('mode-screen-best'),
@@ -123,6 +125,8 @@ export class UI {
       gameOverNote: $('gameover-note'),
       againBtn: $('again-btn'),
       friendsBadge: $('friends-badge'),
+      leaderboardBtn: $('leaderboard-btn'),
+      leaderboardList: $('leaderboard-list'),
       addFriendForm: $('add-friend-form'),
       friendAvatar: $('friend-avatar'),
       friendName: $('friend-name'),
@@ -152,6 +156,11 @@ export class UI {
     $$('[data-difficulty]').forEach((btn) => btn.addEventListener('click', () => callback(btn.dataset.difficulty)));
   }
 
+  /** callback(seconds) when Blitz's 30s/60s duration toggle (mode screen) is tapped. */
+  onDuration(callback) {
+    $$('[data-duration]').forEach((btn) => btn.addEventListener('click', () => callback(Number(btn.dataset.duration))));
+  }
+
   /** Back arrows (on the Hot Hand and friends screens) and "Menu" buttons. */
   onHome(callback) {
     $$('[data-back], [data-home], #menu-btn').forEach((btn) => btn.addEventListener('click', callback));
@@ -160,6 +169,21 @@ export class UI {
   /** The home screen's Customize button (top left), which also shows your coin balance. */
   onCustomize(callback) {
     $('customize-btn').addEventListener('click', () => callback());
+  }
+
+  /** The home screen's Leaderboard button. */
+  onLeaderboard(callback) {
+    this.el.leaderboardBtn.addEventListener('click', () => callback());
+  }
+
+  /** callback(category) when a leaderboard tab ('baskets', 'blitz30', 'blitz', 'hothand') is tapped. */
+  onLeaderboardTab(callback) {
+    $$('[data-lb-tab]').forEach((btn) => btn.addEventListener('click', () => callback(btn.dataset.lbTab)));
+  }
+
+  /** callback(difficultyId) when the leaderboard's own difficulty filter is tapped. */
+  onLeaderboardDifficulty(callback) {
+    $$('[data-lb-difficulty]').forEach((btn) => btn.addEventListener('click', () => callback(btn.dataset.lbDifficulty)));
   }
 
   /** callback('stadium' | 'floor' | 'ball') when a Customize tab is tapped. */
@@ -348,14 +372,20 @@ export class UI {
    * @param mode        from modes.js (name, desc, bestLabel)
    * @param stats.best      best score for the current difficulty
    * @param stats.lifetime  lifetime baskets for the current difficulty
+   * @param duration    30 or 60 to show Blitz's duration toggle (highlighting
+   *                    the current pick), or null to hide it (Free Throw)
    */
-  showModeScreen(mode, stats) {
+  showModeScreen(mode, stats, duration = null) {
     const e = this.el;
     e.modeScreenTitle.textContent = mode.name.toUpperCase();
     e.modeScreenDesc.textContent = mode.desc;
     e.modeScreenBestLabel.textContent = mode.bestLabel ?? 'Best';
     e.modeScreenBest.textContent = stats.best;
     e.modeScreenLifetime.textContent = stats.lifetime;
+    e.modeDurationPicker.classList.toggle('hidden', duration == null);
+    if (duration != null) {
+      $$('[data-duration]').forEach((btn) => btn.classList.toggle('selected', Number(btn.dataset.duration) === duration));
+    }
   }
 
   /**
@@ -686,6 +716,28 @@ export class UI {
     e.friendBody.innerHTML = friendPage(friend, { wins, losses, ties, played }, difficulty);
   }
 
+  /**
+   * Fill the Leaderboard screen: highlight the picked tab and difficulty, list
+   * the top players.
+   * @param view.category    'baskets' | 'blitz30' | 'blitz' | 'hothand'
+   * @param view.difficulty  'easy' | 'normal' | 'hard'
+   * @param view.rows        [{ username, value }] best first, or null while loading
+   * @param view.error       a friendly message if the request failed
+   * @param myUsername       highlights this player's own row, or null if logged out
+   */
+  renderLeaderboard(view, myUsername) {
+    const e = this.el;
+    $$('[data-lb-tab]').forEach((btn) => btn.classList.toggle('selected', btn.dataset.lbTab === view.category));
+    $$('[data-lb-difficulty]').forEach((btn) => btn.classList.toggle('selected', btn.dataset.lbDifficulty === view.difficulty));
+    e.leaderboardList.innerHTML = view.error
+      ? `<p class="list-empty">${escapeHtml(view.error)}</p>`
+      : !view.rows
+        ? '<p class="list-empty">Loading…</p>'
+        : view.rows.length
+          ? view.rows.map((row, i) => leaderboardRow(row, i, myUsername)).join('')
+          : '<p class="list-empty">No scores yet — be the first!</p>';
+  }
+
   /** Show an error under the login form (or hide it with null). */
   showAuthError(message) {
     showMessage(this.el.authError, message);
@@ -938,6 +990,18 @@ function friendRow(friend) {
       <span class="chevron" aria-hidden="true">›</span>
     </button>
     <button type="button" class="row-btn" data-action="challenge" data-value="${name}">CHALLENGE</button>
+  </div>`;
+}
+
+/** One row on the Leaderboard screen: rank, avatar, name, and that tab's number. */
+function leaderboardRow({ username, value }, index, myUsername) {
+  const name = escapeHtml(username);
+  const you = myUsername && username.toLowerCase() === myUsername.toLowerCase();
+  return `<div class="leaderboard-row${you ? ' you' : ''}">
+    <span class="leaderboard-rank">${index + 1}</span>
+    <span class="avatar small" aria-hidden="true">${name[0].toUpperCase()}</span>
+    <span class="online-who"><b>${name}${you ? ' (you)' : ''}</b></span>
+    <span class="leaderboard-value">${value.toLocaleString()}</span>
   </div>`;
 }
 

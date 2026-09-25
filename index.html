@@ -94,6 +94,7 @@
           <p class="tagline">Flick to shoot. Aim is everything.</p>
           <div class="hero-pills">
             <div class="lifetime-total"><span class="mini-ball" aria-hidden="true"></span><b id="lifetime-total">0</b> lifetime baskets</div>
+            <button id="leaderboard-btn" class="leaderboard-btn" type="button">🏆 Leaderboard</button>
           </div>
         </header>
 
@@ -131,6 +132,30 @@
       </div>
     </section>
 
+    <!-- Leaderboard: top players by all-time baskets, Blitz 30s/60s or Hot Hand -->
+    <section id="leaderboard-screen" class="overlay scroll hidden">
+      <div class="panel">
+        <button class="back-btn" type="button" data-back aria-label="Back">‹</button>
+        <h1 class="mode-title">LEADERBOARD</h1>
+        <p class="tagline">Top players, everyone's accounts included.</p>
+
+        <div class="tabs four" role="tablist">
+          <button type="button" role="tab" data-lb-tab="baskets">🏀 Baskets</button>
+          <button type="button" role="tab" data-lb-tab="blitz30">⚡ Blitz 30s</button>
+          <button type="button" role="tab" data-lb-tab="blitz">⚡ Blitz 60s</button>
+          <button type="button" role="tab" data-lb-tab="hothand">🔥 Hot Hand</button>
+        </div>
+
+        <div class="difficulty-picker" role="radiogroup" aria-label="Difficulty">
+          <button type="button" data-lb-difficulty="easy">Easy</button>
+          <button type="button" data-lb-difficulty="normal">Normal</button>
+          <button type="button" data-lb-difficulty="hard">Hard</button>
+        </div>
+
+        <div id="leaderboard-list" class="online-list"></div>
+      </div>
+    </section>
+
     <!-- Hot Hand hub: play, missions and locker -->
     <section id="hothand-screen" class="overlay scroll hidden">
       <div class="panel">
@@ -165,6 +190,12 @@
         <button class="back-btn" type="button" data-back aria-label="Back">‹</button>
         <h1 id="mode-screen-title" class="mode-title">BLITZ</h1>
         <p id="mode-screen-desc" class="tagline"></p>
+
+        <!-- Blitz only: 30s has its own high score, separate from 60s -->
+        <div id="mode-duration-picker" class="duration-picker hidden" role="radiogroup" aria-label="Time">
+          <button type="button" data-duration="60">60 SEC</button>
+          <button type="button" data-duration="30">30 SEC<span class="new-badge">NEW</span></button>
+        </div>
 
         <div class="difficulty-picker" role="radiogroup" aria-label="Difficulty">
           <button type="button" data-difficulty="easy">Easy</button>

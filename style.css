@@ -1022,6 +1022,53 @@ body {
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
 }
 
+/* Blitz's 30s/60s toggle on the mode screen, same look as the difficulty picker */
+.duration-picker {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+  margin: 0 0 10px;
+  padding: 4px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.duration-picker button {
+  position: relative;
+  padding: 10px 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.duration-picker button.selected {
+  background: #fff;
+  color: #111a33;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+
+/* Small pill flagging the new 30 sec option */
+.new-badge {
+  position: absolute;
+  top: -9px;
+  right: -2px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #ff3b5c;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  box-shadow: 0 3px 8px rgba(255, 59, 92, 0.5);
+}
+
 /* Customize button in the home screen's top-left corner (same spot as the back arrows) */
 .customize-btn {
   position: absolute;
@@ -1618,6 +1665,67 @@ body {
   flex-wrap: wrap;
   justify-content: center;
   gap: 8px;
+}
+
+/* Leaderboard button next to the lifetime baskets pill */
+.leaderboard-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid rgba(199, 125, 255, 0.35);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(199, 125, 255, 0.18), rgba(138, 63, 252, 0.1));
+  color: rgba(255, 255, 255, 0.85);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  box-shadow: 0 6px 20px rgba(138, 63, 252, 0.18);
+  cursor: pointer;
+}
+
+.leaderboard-btn:active {
+  transform: scale(0.97);
+}
+
+/* Leaderboard screen rows: rank, avatar, name, that tab's number */
+.leaderboard-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.leaderboard-row.you {
+  box-shadow: inset 4px 0 0 #26c6f2;
+  background: rgba(38, 198, 242, 0.12);
+}
+
+.leaderboard-rank {
+  flex: none;
+  width: 22px;
+  text-align: center;
+  font-family: var(--display);
+  font-style: italic;
+  font-weight: 800;
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.leaderboard-row:nth-child(1) .leaderboard-rank { color: #ffd23f; }
+.leaderboard-row:nth-child(2) .leaderboard-rank { color: #cfd8e3; }
+.leaderboard-row:nth-child(3) .leaderboard-rank { color: #d98c4a; }
+
+.leaderboard-value {
+  flex: none;
+  font-family: var(--display);
+  font-style: italic;
+  font-weight: 800;
+  font-size: 18px;
 }
 
 /* Tiny CSS coin (like .mini-ball) */

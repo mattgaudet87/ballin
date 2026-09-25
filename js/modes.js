@@ -27,6 +27,24 @@ export const MODES = {
     movingHoop: { stat: 'score', startAt: 10, speedStart: 0.7, speedPer: 0.05, difficulties: ['hard'] },
   },
 
+  // The 30-second version of Blitz, picked from a duration toggle on the Blitz
+  // mode screen (see showModeScreen() in main.js). Its own mode id keeps its
+  // best score and lifetime baskets separate from the 60-second version,
+  // exactly like any other mode (see loadBests()/loadLifetime() in main.js).
+  blitz30: {
+    id: 'blitz30',
+    name: 'Blitz',
+    desc: '30 seconds. Score all you can.',
+    timed: true,
+    duration: 30, // seconds
+    endsOnMiss: false,
+    basketMultipliers: false,
+    powerUps: false,
+    missions: false,
+    fire: true,
+    movingHoop: { stat: 'score', startAt: 10, speedStart: 0.7, speedPer: 0.05, difficulties: ['hard'] },
+  },
+
   hothand: {
     id: 'hothand',
     name: 'Hot Hand',
