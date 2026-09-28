@@ -75,6 +75,11 @@
     <!-- Change difficulty mid-game (solo modes only): ends this game and starts a new one -->
     <button id="difficulty-btn" class="hidden" type="button" aria-label="Change difficulty">⇄</button>
 
+    <!-- Hot Hand only: badge lights up when a mission is done and ready to collect -->
+    <button id="missions-btn" class="hidden" type="button" aria-label="Missions">
+      🏆<span id="missions-badge" class="corner-badge hidden">0</span>
+    </button>
+
     <div id="hint" class="hidden">
       <span class="hint-arrow">↑</span>
       Swipe up to shoot
@@ -382,11 +387,6 @@
           <div><span id="stat-streak">0</span><small>Best streak</small></div>
         </div>
 
-        <div id="gameover-missions-block" class="hidden">
-          <h2 class="section-title">Missions</h2>
-          <div id="gameover-missions" class="missions"></div>
-        </div>
-
         <div class="btn-row">
           <button id="menu-btn" class="ghost-btn" type="button">MENU</button>
           <button id="again-btn" class="big-btn" type="button">PLAY AGAIN</button>
@@ -445,6 +445,15 @@
           <button type="button" class="ghost-btn" data-pause-resume>RESUME</button>
           <button type="button" class="forfeit-btn" data-pause-forfeit>FORFEIT</button>
         </div>
+      </div>
+    </div>
+
+    <!-- Missions popup: opened from the 🏆 button during a Hot Hand run (tap outside to close) -->
+    <div id="missions-popup" class="popup hidden" role="dialog" aria-label="Missions">
+      <div class="popup-card">
+        <p class="eyebrow">MISSIONS</p>
+        <div id="missions-popup-list" class="missions"></div>
+        <button type="button" class="ghost-btn missions-close-btn" data-missions-close>CLOSE</button>
       </div>
     </div>
   </main>

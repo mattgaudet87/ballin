@@ -433,6 +433,7 @@ ui.onFriendPage({
   remove: () => removeFriend(friendPage.username),
 });
 ui.onCollect(collectReward);
+ui.onMissionsButton(openMissionsPopup);
 ui.onCustomize(showCustomize);
 ui.onCustomizeTab((tab) => showCustomizeTab(tab));
 ui.onCustomizeItem(customizeItem);
@@ -570,14 +571,27 @@ function missionViews() {
   return missions.list.map((m) => ({ text: missions.describe(m), progress: m.progress, target: m.target, completed: m.completed }));
 }
 
+/** Badge on the in-game trophy button: how many finished missions are waiting to be collected. */
+function refreshMissionsBadge() {
+  ui.setMissionsBadge(missions.list.filter((m) => m.completed).length);
+}
+
+/** The trophy button during a Hot Hand run: pause and show what's ready to collect. */
+function openMissionsPopup() {
+  if (!inGame() || !game.mode.missions) return;
+  game.paused = true;
+  ui.showMissionsPopup(missionViews(), () => { game.paused = false; });
+}
+
 /** "Collect reward" tapped: reveal the prize in a popup, then refresh the lists. */
 function collectReward(index) {
   const items = missions.collect(index);
   if (!items.length) return;
   for (const id of items) inventory.add(id);
   audio.missionComplete();
+  refreshMissionsBadge();
   ui.showRewardPopup(items, () => {
-    if (game.state === 'gameover') ui.renderGameOverMissions(missionViews());
+    if (inGame()) ui.renderMissionsPopup(missionViews());
     else ui.renderHotHandHub(missionViews(), inventory);
   });
 }
@@ -884,7 +898,8 @@ function startGame(modeId) {
   newBall();
   // Passing Blitz with Friends or an online challenge changes another player's
   // turn or a sent challenge, so only solo modes can switch difficulty mid-game.
-  ui.showGame({ powerUps: mode.powerUps, canChangeDifficulty: !mode.passAndPlay && !mode.online });
+  ui.showGame({ powerUps: mode.powerUps, canChangeDifficulty: !mode.passAndPlay && !mode.online, missions: mode.missions });
+  if (mode.missions) refreshMissionsBadge();
 }
 
 /** The player shot the first ball: the clock (if any) starts now. */
@@ -977,21 +992,24 @@ function endGame() {
     syncScores(); // lifetime baskets
     return endRound();
   }
-  game.state = 'gameover';
 
   const result = gameResult();
   const isNewBest = result > game.startBest;
   saveBest(result);
   if (isNewBest) setTimeout(() => audio.newBest(), 500);
 
-  // Hot Hand missions: record progress. Rewards wait for "Collect reward".
-  let missionInfo = null;
+  // Hot Hand: no game-over screen. Record mission progress (a completed
+  // mission just shows up as a badge on the trophy button), then jump
+  // straight back into a fresh run — the score resets to 0.
   if (mode.missions) {
     const results = missions.applyGame(gameStats());
-    missionInfo = { views: missionViews(), results };
-    if (results.some((r) => r.justCompleted)) setTimeout(() => audio.missionComplete(), 1100);
+    if (results.some((r) => r.justCompleted)) setTimeout(() => audio.missionComplete(), 500);
+    refreshMissionsBadge();
+    syncScores();
+    return startGame(mode.id);
   }
 
+  game.state = 'gameover';
   ui.showGameOver({
     ...game,
     score: result,
@@ -999,7 +1017,6 @@ function endGame() {
     best: game.best[mode.id][diff],
     lifetime: game.lifetime[mode.id][diff],
     isNewBest,
-    missions: missionInfo,
     coins: game.coinsEarned,
   });
   newBall();

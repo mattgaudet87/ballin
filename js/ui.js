@@ -5,8 +5,10 @@
  *   - menu screens: home, Customize (Stadium / Floors / Balls / Power-ups tabs), Hot Hand hub
  *     (missions + locker), Blitz with Friends (online: login, your stats, friends, challenges;
  *     Pass and play button), Pass and play setup (names), a friend's page, pass-the-phone
- *     handoff, friends results, game over
- *   - the reward popup and the pause popup (LEAVE mid-game: RESUME or FORFEIT)
+ *     handoff, friends results, game over (Blitz and Free Throw — Hot Hand has no game over
+ *     screen; a miss just restarts the run)
+ *   - the reward popup, the pause popup (LEAVE mid-game: RESUME or FORFEIT) and the Hot Hand
+ *     missions popup (the in-game trophy button)
  *   - the in-game HUD, "swipe up" hint and power-up trays
  *   - the sound and music mute buttons
  *
@@ -90,8 +92,6 @@ export class UI {
       statAccuracy: $('stat-accuracy'),
       statSwishes: $('stat-swishes'),
       statStreak: $('stat-streak'),
-      gameOverMissionsBlock: $('gameover-missions-block'),
-      gameOverMissions: $('gameover-missions'),
       handoffRound: $('handoff-round'),
       handoffName: $('handoff-name'),
       handoffScores: $('handoff-scores'),
@@ -109,6 +109,10 @@ export class UI {
       leaveBtn: $('leave-btn'),
       difficultyBtn: $('difficulty-btn'),
       difficultyPopup: $('difficulty-popup'),
+      missionsBtn: $('missions-btn'),
+      missionsBadge: $('missions-badge'),
+      missionsPopup: $('missions-popup'),
+      missionsPopupList: $('missions-popup-list'),
       pausePopup: $('pause-popup'),
       pauseScore: $('pause-score'),
       pauseTimeStat: $('pause-time-stat'),
@@ -242,12 +246,17 @@ export class UI {
 
   /** callback(missionIndex) when a "Collect reward" button is tapped. */
   onCollect(callback) {
-    for (const list of [this.el.hubMissions, this.el.gameOverMissions]) {
+    for (const list of [this.el.hubMissions, this.el.missionsPopupList]) {
       list.addEventListener('click', (e) => {
         const button = e.target.closest('[data-collect]');
         if (button) callback(Number(button.dataset.collect));
       });
     }
+  }
+
+  /** The trophy button shown during a Hot Hand run. */
+  onMissionsButton(callback) {
+    this.el.missionsBtn.addEventListener('click', callback);
   }
 
   // --- Online screen buttons ---
@@ -573,7 +582,6 @@ export class UI {
 
   /**
    * @param stats.title     headline, e.g. "TIME'S UP"
-   * @param stats.missions  (Hot Hand only) mission views + results to animate
    * @param stats.note      optional line under the score (online challenges)
    * @param stats.againLabel text on the right-hand button (default "PLAY AGAIN")
    */
@@ -591,32 +599,32 @@ export class UI {
     e.statStreak.textContent = stats.bestStreak;
     e.newBest.classList.toggle('hidden', !stats.isNewBest);
     this.setGameOverCoins(stats.coins ?? 0);
-
-    e.gameOverMissionsBlock.classList.toggle('hidden', !stats.missions);
-    if (stats.missions) {
-      const { views, results } = stats.missions;
-      // Start the bars at their old progress, then fill them up.
-      e.gameOverMissions.innerHTML = views
-        .map((m, i) => missionCard({ ...m, progress: results[i].before, completed: m.completed && !results[i].justCompleted }, i))
-        .join('');
-      setTimeout(() => this.animateMissions(views, results), 350);
-    }
     this.showScreen('gameover');
   }
 
-  /** Re-draw the game-over missions without animation (after collecting one). */
-  renderGameOverMissions(views) {
-    this.el.gameOverMissions.innerHTML = views.map((m, i) => missionCard(m, i)).join('');
+  /** Number badge on the in-game trophy button: missions finished and waiting to be collected. */
+  setMissionsBadge(count) {
+    this.el.missionsBadge.textContent = count;
+    this.el.missionsBadge.classList.toggle('hidden', !count);
   }
 
-  animateMissions(views, results) {
-    this.el.gameOverMissions.querySelectorAll('.mission').forEach((card, i) => {
-      const m = views[i];
-      card.querySelector('.bar-fill').style.width = `${(m.progress / m.target) * 100}%`;
-      card.querySelector('.mission-count').textContent = `${m.progress}/${m.target}`;
-      if (results[i].after > results[i].before) card.classList.add('gained');
-      if (m.completed) card.classList.add('done');
-    });
+  /** Trophy button popup during a Hot Hand run (tap outside to close). */
+  showMissionsPopup(views, onClose) {
+    this.renderMissionsPopup(views);
+    const popup = this.el.missionsPopup;
+    popup.classList.remove('hidden');
+    const close = (e) => {
+      if (e.target !== popup && !e.target.closest('[data-missions-close]')) return;
+      popup.classList.add('hidden');
+      popup.removeEventListener('click', close);
+      onClose();
+    };
+    popup.addEventListener('click', close);
+  }
+
+  /** Re-draw the missions popup's list (after collecting one, while it's still open). */
+  renderMissionsPopup(views) {
+    this.el.missionsPopupList.innerHTML = views.map((m, i) => missionCard(m, i)).join('');
   }
 
   /**
@@ -767,12 +775,13 @@ export class UI {
   // --- In game -------------------------------------------------------------------
 
   /** Hide menus and show the in-game HUD (and power-up trays if this mode has them). */
-  showGame({ powerUps, canChangeDifficulty }) {
+  showGame({ powerUps, canChangeDifficulty, missions }) {
     this.showScreen(null);
     show(this.el.hud);
     this.el.ballTray.classList.toggle('hidden', !powerUps);
     this.el.drinkTray.classList.toggle('hidden', !powerUps);
     this.el.difficultyBtn.classList.toggle('hidden', !canChangeDifficulty);
+    this.el.missionsBtn.classList.toggle('hidden', !missions);
     this.shown = {};
   }
 
@@ -783,6 +792,7 @@ export class UI {
     hide(this.el.drinkTray);
     hide(this.el.leaveBtn);
     hide(this.el.difficultyBtn);
+    hide(this.el.missionsBtn);
     this.shown = {};
   }
 

@@ -260,6 +260,46 @@ body {
   -webkit-backdrop-filter: blur(6px);
 }
 
+/* Hot Hand's trophy button, just under the change-difficulty button */
+#missions-btn {
+  position: absolute;
+  top: calc(var(--safe-top) + 150px);
+  right: 14px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 16px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  z-index: 20;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* Small notification dot for a corner button, e.g. #missions-btn */
+.corner-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  padding: 1px 4px;
+  border-radius: 999px;
+  background: #ff3b5c;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1.4;
+  box-shadow: 0 0 8px rgba(255, 59, 92, 0.7);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.missions-close-btn {
+  margin-top: 16px;
+}
+
 /* --- Hint ----------------------------------------------------------- */
 
 #hint {
