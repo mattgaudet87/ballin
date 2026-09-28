@@ -21,6 +21,9 @@ export const MODES = {
     powerUps: false, // specialty balls + energy drinks
     missions: false,
     fire: true, // 3 in a row = on fire (double points)
+    // No game-over screen: the clock hitting 0 flashes the final score and
+    // starts a fresh run right away, same as Hot Hand's miss-and-reset.
+    quickRestart: true,
     // The hoop starts sliding once `stat` reaches `startAt`, then speeds up
     // by `speedPer` for every extra point of that stat. `difficulties` (if
     // given) limits it: in the Blitz modes the hoop only moves on Hard.
@@ -42,6 +45,7 @@ export const MODES = {
     powerUps: false,
     missions: false,
     fire: true,
+    quickRestart: true,
     movingHoop: { stat: 'score', startAt: 10, speedStart: 0.7, speedPer: 0.05, difficulties: ['hard'] },
   },
 

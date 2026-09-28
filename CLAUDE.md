@@ -104,12 +104,17 @@ js/
   badge on the Blitz with Friends card (`ui.setOnlineStatus()`).
 - **Modes** (`game.mode`, from modes.js):
   - **Blitz** is 60 seconds on the clock. On Hard only, the hoop starts moving at 10 points
-    (`movingHoop.difficulties: ['hard']`; `hoopRule()` in main.js applies it). Friends and
-    Online work the same way.
+    (`movingHoop.difficulties: ['hard']`; `hoopRule()` in main.js applies it). Time running out
+    has no game-over screen (`quickRestart`): `endGame()` flashes the final score (and "NEW
+    BEST!") with `effects.floatText()` and calls `startGame()` again right away. Blitz with
+    Friends and Online don't have `quickRestart` — they still need their handoff/results/
+    challenge screens.
   - **Hot Hand** has no clock, and one miss ends the run. Each new ball may roll a basket
     multiplier (2× common, 3×, 5× rare, 10× very rare), shown as a badge above the
     backboard. The hoop starts moving after 5 makes. It's the only mode with
-    power-ups (`powerUps`) and missions (`missions`).
+    power-ups (`powerUps`) and missions (`missions`). It also has no game-over screen: a miss
+    just resets the run to 0 (`endGame()` calls `startGame()` again). A finished mission shows
+    up as a badge on the in-game trophy button (`#missions-btn`) instead.
   - **Blitz with Friends** (`passAndPlay`) is pass and play. Turns go A, B, A, B, with 30s
     rounds. `game.match` holds the players and turn. Each round starts from that player's
     running total (`startGame`), and `endGame()` → `endRound()` records it. It's built so an
@@ -123,8 +128,8 @@ js/
     = `{ id, opponent, score }`; `id` null = a new challenge). `endGame()` →
     `sendChallengeResult()`; a failed send turns PLAY AGAIN into RETRY.
   - Mode flags (`timed`, `endsOnMiss`, `basketMultipliers`, `powerUps`, `missions`, `fire`,
-    `passAndPlay`, `streakScoring`, `fixedSpot`, `endless`, `online`, `movingHoop`) drive all
-    branching in main.js. Don't check mode ids directly.
+    `passAndPlay`, `streakScoring`, `fixedSpot`, `endless`, `online`, `quickRestart`,
+    `movingHoop`) drive all branching in main.js. Don't check mode ids directly.
 - **Difficulties** (`game.difficulty`, from modes.js) apply to every mode and are saved:
   - **Hard** is the original feel: the hoop is 3.6 m away and swipe speed matters a little.
   - **Normal** puts the hoop at 2.6 m, and `powerMatters: false` means every shot flies the
@@ -188,13 +193,15 @@ js/
   drink activates it for 10 shots. `inventory.startShot()` returns a snapshot (`b.shot` on the
   flying ball) of what that shot gets, so boosts can't expire mid-flight (`boostOn()`). Active
   boosts are saved, so leftover shots carry into the next game.
-- **Missions** (missions.js, Hot Hand only): 3 are always active and shown only in the Hot
-  Hand hub and on its game-over screen. The player sees the target but never the reward.
-  `endGame()` → `missions.applyGame(gameStats())`, and the game-over screen animates the
-  bars. A finished mission becomes `completed` (a green card with a COLLECT REWARD button)
-  and stops counting. `collectReward()` → `missions.collect(i)` rolls the prize from the
-  mission's secret `tier` (1–3 items), adds it to the inventory, shows the reveal popup and
-  puts a new mission in the same slot.
+- **Missions** (missions.js, Hot Hand only): 3 are always active and shown in the Hot Hand hub
+  and in the in-game missions popup (opened from the trophy button, `#missions-btn` — see
+  "Leave button" below for how a mid-game popup pauses). The player sees the target but never
+  the reward. `endGame()` → `missions.applyGame(gameStats())` on every run, win or lose (there's
+  no game-over screen to animate the bars on any more — see "Modes" above). A finished mission
+  becomes `completed` (a green card with a COLLECT REWARD button) and lights up a badge on the
+  trophy button (`refreshMissionsBadge()`). `collectReward()` → `missions.collect(i)` rolls the
+  prize from the mission's secret `tier` (1–3 items), adds it to the inventory, shows the reveal
+  popup and puts a new mission in the same slot.
 - **Random start spot:** `newBall()` → `randomStartX()` puts the ball on one of `CONFIG.ball.spots`
   (8) evenly spaced x positions across the difficulty's `startXRange`. It never uses the same
   spot twice in a row (`game.spot`), so every shot needs fresh aim. Free Throw (`fixedSpot`) is always centered. Power barely matters by design
@@ -229,7 +236,7 @@ js/
   rim or goes lost/off-screen. It stays on screen for `ballLinger`, then it's removed. If time
   runs out, the game ends once no ball in the air is undecided (buzzer beaters count).
   Hot Hand: the first miss sets `game.ending` (no more shots, later makes don't count) and
-  the game over screen follows after `missEndDelay`.
+  `endGame()` follows after `missEndDelay`, resetting the run instead of showing a screen.
 - **Draw order fakes depth** (`ballLayer(b)` + `render()` in main.js): the hoop is drawn
   in two layers (`drawBack`: pole, board, back rim, back net; `drawFront`: front net,
   front rim). Flying balls are sorted farthest first and each is drawn before, between or

@@ -109,8 +109,8 @@ const game = {
 
   timeLeft: 0,
   reloadTimer: 0, // seconds until the next ball pops in
-  ending: false, // Hot Hand: missed, game over is coming (no more shots)
-  endTimer: 0, // seconds until that game over screen
+  ending: false, // Hot Hand: missed, the run is about to reset (no more shots)
+  endTimer: 0, // seconds until that reset (see endGame())
   basketMultiplier: null, // Hot Hand bonus on the NEXT ball's basket, e.g. { value: 3, color }
   coin: false, // is a coin floating in the hoop for the NEXT ball?
   spot: -1, // which of the ball's starting spots was used last (so it never repeats)
@@ -1009,6 +1009,16 @@ function endGame() {
     return startGame(mode.id);
   }
 
+  // Blitz: also no game-over screen. Start a fresh 60/30s run right away,
+  // then flash the score you just got (startGame() clears older effects).
+  if (mode.quickRestart) {
+    syncScores();
+    startGame(mode.id);
+    effects.floatText(view.width / 2, view.height * 0.5, `TIME’S UP · ${result}`, { color: '#ffffff', size: 34, life: 1.4 });
+    if (isNewBest) effects.floatText(view.width / 2, view.height * 0.5 + 40, 'NEW BEST!', { color: '#ffd23f', size: 24, life: 1.4 });
+    return;
+  }
+
   game.state = 'gameover';
   ui.showGameOver({
     ...game,
@@ -1167,7 +1177,7 @@ function updateShots(dt) {
   }
 
   if (game.state !== 'playing') return;
-  // Hot Hand: the miss happened, show the game over after a short pause
+  // Hot Hand: the miss happened, reset the run after a short pause
   if (game.ending) {
     game.endTimer -= dt;
     if (game.endTimer <= 0) endGame();
